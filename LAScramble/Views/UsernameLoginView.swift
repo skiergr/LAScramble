@@ -4,21 +4,27 @@ import FirebaseFirestore
 
 struct UsernameLoginView: View {
     @State private var username = ""
+    @State private var teamName = ""
     @State private var isLoggedIn = false
     @State private var errorMessage: String?
 
     var body: some View {
         VStack(spacing: 20) {
-            Text("Enter your username to start")
+            Text("Enter your info to start")
                 .font(.headline)
 
             TextField("Username", text: $username)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
                 .padding(.horizontal)
 
+            TextField("Team Name", text: $teamName)
+                .textFieldStyle(RoundedBorderTextFieldStyle())
+                .padding(.horizontal)
+
             Button("Continue") {
-                logInWithUsername()
+                logInWithUserInfo()
             }
+            .disabled(username.isEmpty || teamName.isEmpty)
             .padding()
             .background(Color.blue)
             .foregroundColor(.white)
@@ -35,9 +41,9 @@ struct UsernameLoginView: View {
         }
     }
 
-    func logInWithUsername() {
-        guard !username.isEmpty else {
-            errorMessage = "Please enter a username"
+    func logInWithUserInfo() {
+        guard !username.isEmpty && !teamName.isEmpty else {
+            errorMessage = "Enter both username and team name"
             return
         }
 
@@ -48,17 +54,18 @@ struct UsernameLoginView: View {
             }
 
             guard let uid = result?.user.uid else {
-                errorMessage = "Login failed: No user ID"
+                errorMessage = "No UID returned"
                 return
             }
 
             let db = Firestore.firestore()
             db.collection("players").document(uid).setData([
                 "username": username,
+                "teamName": teamName,
                 "joined": Timestamp()
             ]) { error in
                 if let error = error {
-                    errorMessage = "Failed to save username: \(error.localizedDescription)"
+                    errorMessage = "Failed to save info: \(error.localizedDescription)"
                 } else {
                     isLoggedIn = true
                 }

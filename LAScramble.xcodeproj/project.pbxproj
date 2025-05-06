@@ -38,22 +38,9 @@
 		A00154E32DC88AF600F9819F /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
-/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		A00154E02DC848CE00F9819F /* Exceptions for "LAScramble" folder in "LAScramble" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Untitled.swift,
-			);
-			target = A00154692DC82C7500F9819F /* LAScramble */;
-		};
-/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
-
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		A001546C2DC82C7500F9819F /* LAScramble */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				A00154E02DC848CE00F9819F /* Exceptions for "LAScramble" folder in "LAScramble" target */,
-			);
 			path = LAScramble;
 			sourceTree = "<group>";
 		};
