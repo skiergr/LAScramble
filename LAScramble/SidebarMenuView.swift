@@ -12,6 +12,7 @@ struct SidebarMenuView: View {
     var gameID: String
     var teamID: String
     var teamNames: [String: String]
+    var teamLineCounts: [String: [MetroLine: Int]] // ✅ NEW
 
     @State private var showLeaderboard = false
     @State private var showRules = false
@@ -35,18 +36,20 @@ struct SidebarMenuView: View {
             }
             .navigationTitle("Menu")
             .navigationBarTitleDisplayMode(.inline)
+
+            // ✅ Sheets
             .sheet(isPresented: $showLeaderboard) {
                 ScoreDetailsView(
-                    teamLineCounts: [:], // pass real data if needed
+                    teamLineCounts: teamLineCounts,
                     teamNames: teamNames
                 )
             }
             .sheet(isPresented: $showRules) {
-                Text("📜 Game Rules Go Here") // Replace with full RulesView later
+                Text("📜 Game Rules Go Here")
                     .padding()
             }
             .sheet(isPresented: $showHelp) {
-                Text("🚇 Metro Help Content Here") // Replace with MetroHelpView
+                Text("🚇 Metro Help Content Here")
                     .padding()
             }
         }

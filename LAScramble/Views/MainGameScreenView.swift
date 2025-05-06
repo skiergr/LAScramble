@@ -22,7 +22,7 @@ struct MainGameScreenView: View {
 
     @State private var timeRemaining: TimeInterval = 0
     @State private var timerEnded = false
-    let gameDuration: TimeInterval = 40;
+    let gameDuration: TimeInterval = 2*60*60;
     @State private var timer: Timer?
    
     @State private var selectedLine: MetroLine?
@@ -43,7 +43,12 @@ struct MainGameScreenView: View {
             ScoreDetailsView(teamLineCounts: teamLineCounts, teamNames: teamNames)
         }
         .sheet(isPresented: $showSidebar) {
-            SidebarMenuView(gameID: gameID, teamID: teamID, teamNames: teamNames)
+            SidebarMenuView(
+                gameID: gameID,
+                teamID: teamID,
+                teamNames: teamNames,
+                teamLineCounts: teamLineCounts
+            )
         }
         .fullScreenCover(isPresented: $timerEnded) {
             EndGameView(gameID: gameID)
@@ -107,6 +112,7 @@ struct MainGameScreenView: View {
         fetchTeamName()
         fetchTeamNames()
         fetchStartTimeAndBeginTimer()
+        startLineControlListener()
     }
 
 
@@ -130,7 +136,7 @@ struct MainGameScreenView: View {
             .padding(.horizontal)
 
 
-            ScoreboardHeaderView(teamLineCounts: teamLineCounts, teamNames: teamNames) {
+            ScoreboardHeaderView(controlledLineCounts: controlledLineCounts, teamNames: teamNames) {
                 showScoreDetails = true
             }
 
@@ -149,13 +155,11 @@ struct MainGameScreenView: View {
                         .scaledToFit()
 
                     ForEach(sampleStations) { station in
-                        let isCompletedGlobally = globallyCompleted.contains { $0.station == station.name }
-
                         Button(action: {
                             selectedLine = station.lines.first
                             selectedStation = station
                         }) {
-                            StationDotView(station: station, isCompleted: isCompletedGlobally)
+                            StationDotView(station: station, globallyCompleted: globallyCompleted)
                                 .frame(width: 20, height: 20)
                         }
                         .position(x: station.x, y: station.y)
@@ -391,13 +395,15 @@ struct MainGameScreenView: View {
                 let challenge = GameChallenge(title: title, description: description, station: stationName, line: globalLine)
 
                 // ✅ Check if this specific challenge has already been used for this line
-                let alreadyUsed = (unlockedChallenges + globallyCompleted + otherTeamsUnlocked.flatMap { $0.value })
-                    .contains(where: { $0.title == challenge.title && $0.station == station.name && $0.line == line })
+                let isCompletedGlobally = globallyCompleted.contains {
+                    $0.title == challenge.title && $0.station == station.name && $0.line == line
+                }
 
-                guard !alreadyUsed else {
-                    print("⚠️ Challenge '\(challenge.title)' already used at \(station.name) on line \(line.rawValue)")
+                guard !isCompletedGlobally else {
+                    print("⚠️ Challenge '\(challenge.title)' already completed at \(station.name) on line \(line.rawValue)")
                     return
                 }
+
 
                 print("📌 Found existing challenge: \(challenge.title)")
                 self.saveChallengeToUnlocked(GameChallenge(title: challenge.title, description: challenge.description, station: challenge.station, line: line))
@@ -411,11 +417,12 @@ struct MainGameScreenView: View {
                 }
 
                 // ✅ Prevent reusing same challenge title on other lines
-                let alreadyUsed = (unlockedChallenges + globallyCompleted + otherTeamsUnlocked.flatMap { $0.value })
-                    .contains(where: { $0.station == station.name && $0.title == random.title && $0.line == line })
+                let isCompletedGlobally = globallyCompleted.contains {
+                    $0.title == random.title && $0.station == station.name && $0.line == line
+                }
 
-                guard !alreadyUsed else {
-                    print("⚠️ Randomly picked challenge already used at \(station.name) on line \(line.rawValue)")
+                guard !isCompletedGlobally else {
+                    print("⚠️ Randomly picked challenge already completed at \(station.name) on line \(line.rawValue)")
                     return
                 }
 
@@ -722,42 +729,99 @@ struct MainGameScreenView: View {
     
     struct StationDotView: View {
         let station: Station
-        let isCompleted: Bool
+        let globallyCompleted: [GameChallenge]
 
         var body: some View {
-            ZStack {
-                if isCompleted {
-                    Circle().fill(Color.gray)
-                } else if station.lines.count == 1 {
-                    Circle().fill(station.lines.first?.color ?? .black)
-                } else {
-                    GeometryReader { geometry in
-                        let size = geometry.size
-                        let radius = min(size.width, size.height) / 2
-                        let center = CGPoint(x: size.width / 2, y: size.height / 2)
+            GeometryReader { geometry in
+                let size = geometry.size
+                let radius = min(size.width, size.height) / 2
+                let center = CGPoint(x: size.width / 2, y: size.height / 2)
 
-                        ZStack {
-                            ForEach(0..<station.lines.count, id: \.self) { i in
-                                let line = station.lines[i]
-                                Path { path in
-                                    let startAngle = Angle(degrees: (360.0 / Double(station.lines.count)) * Double(i) - 90)
-                                    let endAngle = Angle(degrees: (360.0 / Double(station.lines.count)) * Double(i + 1) - 90)
-
-                                    path.move(to: center)
-                                    path.addArc(center: center, radius: radius,
-                                                startAngle: startAngle,
-                                                endAngle: endAngle,
-                                                clockwise: false)
-                                }
-                                .fill(line.color)
-                            }
+                ZStack {
+                    ForEach(Array(station.lines.enumerated()), id: \.offset) { index, line in
+                        let isCompleted = globallyCompleted.contains {
+                            $0.station == station.name && $0.line == line
                         }
+
+                        Path { path in
+                            let startAngle = Angle(degrees: (360.0 / Double(station.lines.count)) * Double(index) - 90)
+                            let endAngle = Angle(degrees: (360.0 / Double(station.lines.count)) * Double(index + 1) - 90)
+
+                            path.move(to: center)
+                            path.addArc(center: center, radius: radius,
+                                        startAngle: startAngle,
+                                        endAngle: endAngle,
+                                        clockwise: false)
+                        }
+                        .fill(isCompleted ? Color.gray : line.color)
                     }
                 }
             }
         }
     }
 
+    func startLineControlListener() {
+        let db = Firestore.firestore()
+        let teamsRef = db.collection("games").document(gameID).collection("teams")
+
+        teamsRef.getDocuments { snapshot, _ in
+            guard let docs = snapshot?.documents else { return }
+
+            for doc in docs {
+                let teamID = doc.documentID
+                teamsRef.document(teamID)
+                    .collection("completedChallenges")
+                    .addSnapshotListener { snap, _ in
+                        guard let challengeDocs = snap?.documents else { return }
+
+                        var updatedCounts = self.teamLineCounts
+
+                        var lineStationMap: [MetroLine: Set<String>] = [:]
+
+                        for doc in challengeDocs {
+                            let station = doc.data()["station"] as? String ?? ""
+                            let lineRaw = doc.data()["line"] as? String ?? ""
+                            if let line = MetroLine(rawValue: lineRaw) {
+                                lineStationMap[line, default: []].insert(station)
+                            }
+                        }
+
+                        for (line, stations) in lineStationMap {
+                            updatedCounts[teamID, default: [:]][line] = stations.count
+                        }
+
+                        DispatchQueue.main.async {
+                            self.teamLineCounts = updatedCounts
+                            self.fetchTeamNames() // Optional, if team names can change
+                        }
+                    }
+            }
+        }
+    }
+    
+    private var controlledLineCounts: [String: Int] {
+        var result: [String: Int] = [:]
+
+        for teamID in teamLineCounts.keys {
+            var controlledLines = 0
+
+            for line in MetroLine.allCases {
+                // Get count of stations for each team for this line
+                let scores = teamLineCounts.mapValues { $0[line] ?? 0 }
+
+                let maxCount = scores.values.max() ?? 0
+                let topTeams = scores.filter { $0.value == maxCount && maxCount > 0 }.keys
+
+                if topTeams.count == 1 && topTeams.contains(teamID) {
+                    controlledLines += 1
+                }
+            }
+
+            result[teamID] = controlledLines
+        }
+
+        return result
+    }
 
 }
 
