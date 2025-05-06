@@ -22,10 +22,11 @@ struct MainGameScreenView: View {
 
     @State private var timeRemaining: TimeInterval = 0
     @State private var timerEnded = false
-
-    let gameDuration: TimeInterval = 2*60*60
-
+    let gameDuration: TimeInterval = 40;
     @State private var timer: Timer?
+   
+    @State private var selectedLine: MetroLine?
+
     
     var body: some View {
         Group {
@@ -59,14 +60,7 @@ struct MainGameScreenView: View {
     }
 
     private func stationPopup(station: Station) -> some View {
-        let isUnlocked = unlockedChallenges.contains { $0.station == station.name }
-        let isCompleted = completedChallenges.contains { $0.station == station.name }
-        let isSacrificed = false // TODO: Add logic later
-
-        let sharedChallenge = (unlockedChallenges + globallyCompleted + otherTeamsUnlocked.flatMap { $0.value })
-            .first { $0.station == station.name }
-
-        let completedByTeam = sharedChallenge.flatMap { teamThatCompleted($0) }
+        let line = selectedLine ?? station.lines.first!
 
         return StationPopupFullScreenView(
             station: station,
@@ -74,19 +68,24 @@ struct MainGameScreenView: View {
                 unlockChallenge(for: station, on: selectedLine)
                 selectedStation = nil
             },
-            onClose: { selectedStation = nil },
-            alreadyUnlocked: isUnlocked,
-            isCompleted: isCompleted,
-            isSacrificed: isSacrificed,
+            onClose: {
+                selectedStation = nil
+                selectedLine = nil
+            },
+            isSacrificed: false,
             controllingTeamName: controllingTeamForStation(station),
-            currentChallenge: sharedChallenge,
-            completedByTeamID: completedByTeam,
             teamNames: teamNames,
-            myTeamID: teamID // ✅ Fix: provide the missing argument
+            myTeamID: teamID,
+            selectedLine: line,
+            allUnlocked: unlockedChallenges,
+            allCompleted: completedChallenges,
+            globalCompleted: globallyCompleted,
+            allOtherUnlocked: otherTeamsUnlocked,
+            teamCompletions: allTeamCompletions
         )
+
     }
-
-
+    
     private func challengePopup(challenge: GameChallenge) -> some View {
         ChallengePopupView(
             challenge: challenge,
@@ -142,31 +141,102 @@ struct MainGameScreenView: View {
     }
 
     private var metroMapView: some View {
-        ZStack(alignment: .topLeading) {
-            GeometryReader { geometry in
+        ZStack {
+            ZoomableScrollView {
                 ZStack {
                     Image("metro_map")
                         .resizable()
                         .scaledToFit()
-                        .frame(width: geometry.size.width, height: geometry.size.height)
 
                     ForEach(sampleStations) { station in
                         let isCompletedGlobally = globallyCompleted.contains { $0.station == station.name }
 
                         Button(action: {
+                            selectedLine = station.lines.first
                             selectedStation = station
                         }) {
-                            Circle()
-                                .fill(isCompletedGlobally ? Color.gray : (station.lines.first?.color ?? .black))
+                            StationDotView(station: station, isCompleted: isCompletedGlobally)
                                 .frame(width: 20, height: 20)
                         }
                         .position(x: station.x, y: station.y)
                     }
                 }
             }
+            .clipped()
         }
-        .frame(height: UIScreen.main.bounds.height * 0.5)
+        .frame(height: UIScreen.main.bounds.height * 0.35)
     }
+
+    struct ZoomableScrollView<Content: View>: View {
+        @State private var scale: CGFloat = 1.0
+        @State private var lastScale: CGFloat = 1.0
+        @State private var offset: CGSize = .zero
+        @State private var lastOffset: CGSize = .zero
+
+        private let minScale: CGFloat = 1.0
+        private let maxScale: CGFloat = 3.0
+
+        let content: Content
+
+        init(@ViewBuilder content: () -> Content) {
+            self.content = content()
+        }
+
+        var body: some View {
+            GeometryReader { geometry in
+                let containerSize = geometry.size
+
+                content
+                    .scaleEffect(scale)
+                    .offset(offset)
+                    .gesture(
+                        SimultaneousGesture(
+                            MagnificationGesture()
+                                .onChanged { value in
+                                    let newScale = lastScale * value
+                                    scale = min(max(newScale, minScale), maxScale)
+                                }
+                                .onEnded { _ in
+                                    scale = min(max(scale, minScale), maxScale)
+                                    lastScale = scale
+                                    offset = clampedOffset(in: containerSize)
+                                    lastOffset = offset
+                                },
+                            DragGesture()
+                                .onChanged { value in
+                                    guard scale > 1.0 else { return }
+                                    let proposedOffset = CGSize(
+                                        width: lastOffset.width + value.translation.width,
+                                        height: lastOffset.height + value.translation.height
+                                    )
+                                    offset = clampedOffset(proposedOffset, in: containerSize)
+                                }
+                                .onEnded { _ in
+                                    lastOffset = offset
+                                }
+                        )
+                    )
+                    .animation(.easeInOut(duration: 0.2), value: scale)
+            }
+        }
+
+        // MARK: - Clamping Helper
+        private func clampedOffset(_ proposed: CGSize? = nil, in containerSize: CGSize) -> CGSize {
+            let proposedOffset = proposed ?? offset
+
+            let contentWidth = containerSize.width * scale
+            let contentHeight = containerSize.height * scale
+
+            let maxX = max((contentWidth - containerSize.width) / 2, 0)
+            let maxY = max((contentHeight - containerSize.height) / 2, 0)
+
+            let clampedX = min(max(proposedOffset.width, -maxX), maxX)
+            let clampedY = min(max(proposedOffset.height, -maxY), maxY)
+
+            return CGSize(width: clampedX, height: clampedY)
+        }
+    }
+
 
     private var challengeListView: some View {
         ScrollView {
@@ -298,18 +368,17 @@ struct MainGameScreenView: View {
         }
     }
 
-
-
-    // ... other functions (unlockChallenge, completeChallenge, listeners) remain unchanged ...
-
-
     func unlockChallenge(for station: Station, on line: MetroLine) {
-        print("🚀 Attempting to unlock challenge for station: \(station.name)")
+        print("🚀 Attempting to unlock challenge for station: \(station.name) on line \(line.rawValue)")
 
         let db = Firestore.firestore()
-        let safeStationID = station.name.replacingOccurrences(of: "/", with: "_")
+
+        // 🔐 Use both station + line in the global ID
+        let safeStationLineID = "\(station.name)_\(line.rawValue)"
+            .replacingOccurrences(of: "[^a-zA-Z0-9_]+", with: "_", options: .regularExpression)
+        
         let stationRef = db.collection("games").document(gameID)
-            .collection("stationChallenges").document(safeStationID)
+            .collection("stationChallenges").document(safeStationLineID)
 
         stationRef.getDocument { snapshot, error in
             if let data = snapshot?.data(),
@@ -317,16 +386,36 @@ struct MainGameScreenView: View {
                let description = data["description"] as? String,
                let stationName = data["station"] as? String,
                let lineRaw = data["line"] as? String,
-               let line = MetroLine(rawValue: lineRaw) {
+               let globalLine = MetroLine(rawValue: lineRaw) {
 
-                print("📌 Found existing global challenge for \(stationName): \(title)")
-                let challenge = GameChallenge(title: title, description: description, station: stationName, line: line)
-                self.saveChallengeToUnlocked(challenge)
+                let challenge = GameChallenge(title: title, description: description, station: stationName, line: globalLine)
+
+                // ✅ Check if this specific challenge has already been used for this line
+                let alreadyUsed = (unlockedChallenges + globallyCompleted + otherTeamsUnlocked.flatMap { $0.value })
+                    .contains(where: { $0.title == challenge.title && $0.station == station.name && $0.line == line })
+
+                guard !alreadyUsed else {
+                    print("⚠️ Challenge '\(challenge.title)' already used at \(station.name) on line \(line.rawValue)")
+                    return
+                }
+
+                print("📌 Found existing challenge: \(challenge.title)")
+                self.saveChallengeToUnlocked(GameChallenge(title: challenge.title, description: challenge.description, station: challenge.station, line: line))
 
             } else {
+                // 🆕 Pick random challenge from station pool
                 let options = sampleChallenges.filter { $0.station == station.name }
                 guard let random = options.randomElement() else {
                     print("❌ No challenges found for station: \(station.name)")
+                    return
+                }
+
+                // ✅ Prevent reusing same challenge title on other lines
+                let alreadyUsed = (unlockedChallenges + globallyCompleted + otherTeamsUnlocked.flatMap { $0.value })
+                    .contains(where: { $0.station == station.name && $0.title == random.title && $0.line == line })
+
+                guard !alreadyUsed else {
+                    print("⚠️ Randomly picked challenge already used at \(station.name) on line \(line.rawValue)")
                     return
                 }
 
@@ -340,11 +429,12 @@ struct MainGameScreenView: View {
                     "timestamp": Timestamp()
                 ]
 
+                // ✅ Save to global stationChallenges using station+line key
                 stationRef.setData(data) { err in
                     if let err = err {
-                        print("❌ Failed to save global station challenge: \(err.localizedDescription)")
+                        print("❌ Failed to save global challenge: \(err.localizedDescription)")
                     } else {
-                        print("🌍 Global station challenge set for \(station.name): \(chosenChallenge.title)")
+                        print("🌍 Global challenge set for \(station.name) on line \(line.rawValue): \(chosenChallenge.title)")
                         self.saveChallengeToUnlocked(chosenChallenge)
                     }
                 }
@@ -352,13 +442,17 @@ struct MainGameScreenView: View {
         }
     }
 
-
     func saveChallengeToUnlocked(_ challenge: GameChallenge) {
+        guard let lineRaw = challenge.line?.rawValue else {
+            print("❌ Error: Challenge has no line!")
+            return
+        }
+
         let data: [String: Any] = [
             "title": challenge.title,
             "description": challenge.description,
             "station": challenge.station,
-            "line": challenge.line?.rawValue ?? "",
+            "line": lineRaw,
             "timestamp": Timestamp()
         ]
 
@@ -367,8 +461,9 @@ struct MainGameScreenView: View {
             .collection("teams").document(teamID)
             .collection("unlockedChallenges")
 
-        let docID = "\(challenge.station)_\(challenge.title)"
-            .replacingOccurrences(of: "[^a-zA-Z0-9_]+", with: "_", options: .regularExpression)
+        let safeStation = challenge.station.replacingOccurrences(of: "[^a-zA-Z0-9_]+", with: "_", options: .regularExpression)
+        let safeTitle = challenge.title.replacingOccurrences(of: "[^a-zA-Z0-9_]+", with: "_", options: .regularExpression)
+        let docID = "\(safeStation)_\(safeTitle)_\(lineRaw)"
 
         teamRef.document(docID).setData(data) { error in
             if let error = error {
@@ -378,9 +473,9 @@ struct MainGameScreenView: View {
             }
         }
 
-
         print("✅ Challenge '\(challenge.title)' added to unlockedChallenges for team \(teamID)")
     }
+
 
     func completeChallenge(_ challenge: GameChallenge) {
         unlockedChallenges.removeAll { $0.id == challenge.id }
@@ -623,6 +718,44 @@ struct MainGameScreenView: View {
             }
         }
         return nil
+    }
+    
+    struct StationDotView: View {
+        let station: Station
+        let isCompleted: Bool
+
+        var body: some View {
+            ZStack {
+                if isCompleted {
+                    Circle().fill(Color.gray)
+                } else if station.lines.count == 1 {
+                    Circle().fill(station.lines.first?.color ?? .black)
+                } else {
+                    GeometryReader { geometry in
+                        let size = geometry.size
+                        let radius = min(size.width, size.height) / 2
+                        let center = CGPoint(x: size.width / 2, y: size.height / 2)
+
+                        ZStack {
+                            ForEach(0..<station.lines.count, id: \.self) { i in
+                                let line = station.lines[i]
+                                Path { path in
+                                    let startAngle = Angle(degrees: (360.0 / Double(station.lines.count)) * Double(i) - 90)
+                                    let endAngle = Angle(degrees: (360.0 / Double(station.lines.count)) * Double(i + 1) - 90)
+
+                                    path.move(to: center)
+                                    path.addArc(center: center, radius: radius,
+                                                startAngle: startAngle,
+                                                endAngle: endAngle,
+                                                clockwise: false)
+                                }
+                                .fill(line.color)
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
 

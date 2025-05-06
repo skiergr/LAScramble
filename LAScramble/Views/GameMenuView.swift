@@ -10,32 +10,47 @@ import SwiftUI
 struct GameMenuView: View {
     var body: some View {
         NavigationView {
-            VStack(spacing: 24) {
+            VStack(spacing: 20) {
                 Text("LA Scramble")
                     .font(.largeTitle)
+                    .fontWeight(.bold)
                     .padding(.top, 40)
 
-                NavigationLink(destination: CreateGameView()) {
-                    Text("➕ Create Game")
-                        .padding()
-                        .frame(maxWidth: .infinity)
-                        .background(Color.green)
-                        .foregroundColor(.white)
-                        .cornerRadius(10)
-                }
+                Group {
+                    NavigationLink(destination: CreateGameView()) {
+                        menuButtonLabel("➕ Create Game", color: .green)
+                    }
 
-                NavigationLink(destination: JoinGameView()) {
-                    Text("🔗 Join Game")
-                        .padding()
-                        .frame(maxWidth: .infinity)
-                        .background(Color.blue)
-                        .foregroundColor(.white)
-                        .cornerRadius(10)
+                    NavigationLink(destination: JoinGameView()) {
+                        menuButtonLabel("🔗 Join Game", color: .blue)
+                    }
+
+                    NavigationLink(destination: GalleryView()) {
+                        menuButtonLabel("📸 Gallery", color: .purple)
+                    }
+
+                    NavigationLink(destination: RulesView()) {
+                        menuButtonLabel("📜 Rules", color: .orange)
+                    }
+
+                    NavigationLink(destination: MissionView()) {
+                        menuButtonLabel("🎯 Purpose / Mission", color: .gray)
+                    }
                 }
 
                 Spacer()
             }
             .padding()
         }
+    }
+
+    // Helper function for uniform button styling
+    private func menuButtonLabel(_ text: String, color: Color) -> some View {
+        Text(text)
+            .padding()
+            .frame(maxWidth: .infinity)
+            .background(color)
+            .foregroundColor(.white)
+            .cornerRadius(10)
     }
 }
