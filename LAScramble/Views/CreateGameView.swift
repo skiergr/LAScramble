@@ -1,6 +1,6 @@
 import SwiftUI
-import FirebaseFirestore
 import FirebaseAuth
+import FirebaseFirestore
 
 struct CreateGameView: View {
     @State private var gameCreated = false
@@ -12,7 +12,6 @@ struct CreateGameView: View {
         VStack(spacing: 20) {
             Text("Start a New Game")
                 .font(.title2)
-                .padding()
 
             Button("Create Game") {
                 createGame()
@@ -30,10 +29,9 @@ struct CreateGameView: View {
             }
         }
         .padding()
-        .fullScreenCover(isPresented: Binding<Bool>(
-            get: { gameCreated && !gameID.isEmpty && !teamID.isEmpty },
-            set: { _ in }
-        )) {
+        .fullScreenCover(isPresented: Binding(get: {
+            gameCreated && !gameID.isEmpty && !teamID.isEmpty
+        }, set: { _ in })) {
             MainGameScreenView(gameID: gameID, teamID: teamID)
         }
     }
@@ -44,45 +42,60 @@ struct CreateGameView: View {
             return
         }
 
+        let uid = user.uid
         let db = Firestore.firestore()
         let gameRef = db.collection("games").document()
         let newGameID = gameRef.documentID
-        let newTeamID = "Team-\(user.uid.prefix(6))"
+        let newTeamID = "Team-\(uid.prefix(6))"
         self.teamID = newTeamID
 
-        let playerData: [String: Any] = [
-            "uid": user.uid,
-            "username": user.email ?? "Unknown"
-        ]
-
-        // Write to game document
-        let gameData: [String: Any] = [
-            "startTime": Timestamp(),
-            "createdBy": user.uid,
-            "teams": [newTeamID],
-            "players": [playerData]
-        ]
-
-        // Write to team subcollection
-        let teamData: [String: Any] = [
-            "players": [playerData]
-        ]
-
-        gameRef.setData(gameData) { error in
-            if let error = error {
-                errorMessage = "Error creating game: \(error.localizedDescription)"
+        // Fetch username and teamName from /players/{uid}
+        db.collection("players").document(uid).getDocument { snapshot, error in
+            guard let data = snapshot?.data(),
+                  let username = data["username"] as? String,
+                  let teamName = data["teamName"] as? String else {
+                errorMessage = "Missing player info"
                 return
             }
 
-            gameRef.collection("teams").document(newTeamID).setData(teamData) { err in
-                if let err = err {
-                    errorMessage = "Error adding creator team: \(err.localizedDescription)"
+            // Create game doc
+            let gameData: [String: Any] = [
+                "createdBy": uid,
+                "startTime": Timestamp()
+            ]
+
+            let playerData: [String: Any] = [
+                "uid": uid,
+                "username": username
+            ]
+
+            let teamData: [String: Any] = [
+                "teamName": teamName
+            ]
+
+            gameRef.setData(gameData) { error in
+                if let error = error {
+                    errorMessage = "Error creating game: \(error.localizedDescription)"
                     return
                 }
 
-                print("✅ Game created with ID: \(newGameID), Team ID: \(newTeamID)")
-                gameID = newGameID
-                gameCreated = true
+                let teamRef = gameRef.collection("teams").document(newTeamID)
+                teamRef.setData(teamData) { error in
+                    if let error = error {
+                        errorMessage = "Error creating team: \(error.localizedDescription)"
+                        return
+                    }
+
+                    teamRef.collection("players").document(uid).setData(playerData) { error in
+                        if let error = error {
+                            errorMessage = "Error adding player: \(error.localizedDescription)"
+                            return
+                        }
+
+                        self.gameID = newGameID
+                        self.gameCreated = true
+                    }
+                }
             }
         }
     }
