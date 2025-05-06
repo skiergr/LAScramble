@@ -23,52 +23,21 @@ struct MainGameScreenView: View {
     @State private var timeRemaining: TimeInterval = 0
     @State private var timerEnded = false
 
-    let gameDuration: TimeInterval = 20 // 2 hours in seconds
+    let gameDuration: TimeInterval = 2*60*60
 
     @State private var timer: Timer?
     
     var body: some View {
         Group {
             if gameID.isEmpty || teamID.isEmpty {
-                VStack {
-                    Text("❌ Error: Game ID or Team ID missing.")
-                    Text("gameID=\(gameID), teamID=\(teamID)")
-                }
+                errorView
             } else {
                 mainGameContent
             }
         }
-        .onAppear {
-            listenForUnlockedChallenges()
-            listenForCompletedChallenges()
-            listenForOtherTeams()
-            listenForGlobalCompletions()
-            updateLineControlScores()
-            listenToAllCompletedChallenges()
-            fetchTeamName()
-            fetchTeamNames()
-            fetchStartTimeAndBeginTimer()
-        }
-        .fullScreenCover(item: $selectedStation) { station in
-            StationPopupFullScreenView(
-                station: station,
-                onUnlock: { selectedLine in
-                    unlockChallenge(for: station, on: selectedLine)
-                },
-                onClose: { selectedStation = nil },
-                alreadyUnlocked: unlockedChallenges.contains { $0.station == station.name }
-            )
-        }
-        .fullScreenCover(item: $selectedChallenge) { challenge in
-            ChallengePopupView(
-                challenge: challenge,
-                onComplete: {
-                    completeChallenge(challenge)
-                    selectedChallenge = nil
-                },
-                onClose: { selectedChallenge = nil }
-            )
-        }
+        .onAppear(perform: setupListeners)
+        .fullScreenCover(item: $selectedStation, content: stationPopup)
+        .fullScreenCover(item: $selectedChallenge, content: challengePopup)
         .sheet(isPresented: $showScoreDetails) {
             ScoreDetailsView(teamLineCounts: teamLineCounts, teamNames: teamNames)
         }
@@ -79,6 +48,68 @@ struct MainGameScreenView: View {
             EndGameView(gameID: gameID)
         }
     }
+
+    // MARK: - Components
+
+    private var errorView: some View {
+        VStack {
+            Text("❌ Error: Game ID or Team ID missing.")
+            Text("gameID=\(gameID), teamID=\(teamID)")
+        }
+    }
+
+    private func stationPopup(station: Station) -> some View {
+        let isUnlocked = unlockedChallenges.contains { $0.station == station.name }
+        let isCompleted = completedChallenges.contains { $0.station == station.name }
+        let isSacrificed = false // TODO: Add logic later
+
+        let sharedChallenge = (unlockedChallenges + globallyCompleted + otherTeamsUnlocked.flatMap { $0.value })
+            .first { $0.station == station.name }
+
+        let completedByTeam = sharedChallenge.flatMap { teamThatCompleted($0) }
+
+        return StationPopupFullScreenView(
+            station: station,
+            onUnlock: { selectedLine in
+                unlockChallenge(for: station, on: selectedLine)
+                selectedStation = nil
+            },
+            onClose: { selectedStation = nil },
+            alreadyUnlocked: isUnlocked,
+            isCompleted: isCompleted,
+            isSacrificed: isSacrificed,
+            controllingTeamName: controllingTeamForStation(station),
+            currentChallenge: sharedChallenge,
+            completedByTeamID: completedByTeam,
+            teamNames: teamNames,
+            myTeamID: teamID // ✅ Fix: provide the missing argument
+        )
+    }
+
+
+    private func challengePopup(challenge: GameChallenge) -> some View {
+        ChallengePopupView(
+            challenge: challenge,
+            onComplete: {
+                completeChallenge(challenge)
+                selectedChallenge = nil
+            },
+            onClose: { selectedChallenge = nil }
+        )
+    }
+
+    private func setupListeners() {
+        listenForUnlockedChallenges()
+        listenForCompletedChallenges()
+        listenForOtherTeams()
+        listenForGlobalCompletions()
+        updateLineControlScores()
+        listenToAllCompletedChallenges()
+        fetchTeamName()
+        fetchTeamNames()
+        fetchStartTimeAndBeginTimer()
+    }
+
 
     // MARK: - Main Game UI Extracted to Reduce Complexity
     private var mainGameContent: some View {
@@ -129,7 +160,6 @@ struct MainGameScreenView: View {
                                 .fill(isCompletedGlobally ? Color.gray : (station.lines.first?.color ?? .black))
                                 .frame(width: 20, height: 20)
                         }
-                        .disabled(isCompletedGlobally)
                         .position(x: station.x, y: station.y)
                     }
                 }
@@ -332,10 +362,22 @@ struct MainGameScreenView: View {
             "timestamp": Timestamp()
         ]
 
-        Firestore.firestore().collection("games").document(gameID)
+        let teamRef = Firestore.firestore()
+            .collection("games").document(gameID)
             .collection("teams").document(teamID)
             .collection("unlockedChallenges")
-            .addDocument(data: data)
+
+        let docID = "\(challenge.station)_\(challenge.title)"
+            .replacingOccurrences(of: "[^a-zA-Z0-9_]+", with: "_", options: .regularExpression)
+
+        teamRef.document(docID).setData(data) { error in
+            if let error = error {
+                print("❌ Failed to set unlocked challenge: \(error.localizedDescription)")
+            } else {
+                print("✅ Challenge saved to unlockedChallenges under \(docID)")
+            }
+        }
+
 
         print("✅ Challenge '\(challenge.title)' added to unlockedChallenges for team \(teamID)")
     }
@@ -382,25 +424,43 @@ struct MainGameScreenView: View {
                 }
             }
     }
+    
+    @State private var allTeamCompletions: [String: [GameChallenge]] = [:]
+
 
     func listenToAllCompletedChallenges() {
         let teamsRef = Firestore.firestore()
             .collection("games").document(gameID)
             .collection("teams")
 
-        teamsRef.addSnapshotListener { snapshot, _ in
+        teamsRef.getDocuments { snapshot, _ in
             guard let docs = snapshot?.documents else { return }
 
             for doc in docs {
                 let teamID = doc.documentID
                 teamsRef.document(teamID)
                     .collection("completedChallenges")
-                    .addSnapshotListener { _, _ in
-                        updateLineControlScores() // Refresh scoreboard when any team completes something
+                    .addSnapshotListener { snap, _ in
+                        guard let docs = snap?.documents else { return }
+
+                        let challenges = docs.map { d in
+                            let data = d.data()
+                            return GameChallenge(
+                                title: data["title"] as? String ?? "",
+                                description: data["description"] as? String ?? "",
+                                station: data["station"] as? String ?? "",
+                                line: MetroLine(rawValue: data["line"] as? String ?? "")
+                            )
+                        }
+
+                        DispatchQueue.main.async {
+                            allTeamCompletions[teamID] = challenges
+                        }
                     }
             }
         }
     }
+
 
     
     func listenForCompletedChallenges() {
@@ -542,6 +602,30 @@ struct MainGameScreenView: View {
         let seconds = Int(interval) % 60
         return String(format: "%02d:%02d:%02d", hours, minutes, seconds)
     }
+    func controllingTeamForStation(_ station: Station) -> String? {
+        guard let line = station.lines.first else { return nil }
+
+        let maxCount = teamLineCounts.values.map { $0[line] ?? 0 }.max() ?? 0
+        let topTeams = teamLineCounts.filter { $0.value[line] == maxCount }
+
+        if topTeams.count == 1 {
+            let teamID = topTeams.first!.key
+            return teamNames[teamID]
+        }
+        return nil // tie or no control
+    }
+    func teamThatCompleted(_ challenge: GameChallenge) -> String? {
+        for (tid, challenges) in allTeamCompletions {
+            if challenges.contains(where: {
+                $0.title == challenge.title && $0.station == challenge.station
+            }) {
+                return tid
+            }
+        }
+        return nil
+    }
+
+
 }
 
 
