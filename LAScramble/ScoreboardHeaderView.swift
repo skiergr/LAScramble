@@ -12,7 +12,7 @@ struct ScoreboardHeaderView: View {
 
             HStack {
                 ForEach(teamLineCounts.keys.sorted(), id: \.self) { teamID in
-                    let teamLabel = teamNames[teamID] ?? teamID
+                    let teamLabel = teamNames[teamID] ?? "Team \(teamID.prefix(6))"
                     let linesControlled = controlledLines(for: teamID)
                     Text("\(teamLabel): \(linesControlled) lines")
                         .frame(maxWidth: .infinity)
@@ -34,4 +34,3 @@ struct ScoreboardHeaderView: View {
         }.count
     }
 }
-

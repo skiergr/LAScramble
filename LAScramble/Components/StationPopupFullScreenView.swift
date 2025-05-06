@@ -2,63 +2,107 @@ import SwiftUI
 
 struct StationPopupFullScreenView: View {
     let station: Station
-    let onUnlock: (_ selectedLine: MetroLine) -> Void
+    let onUnlock: (MetroLine) -> Void
     let onClose: () -> Void
-    let alreadyUnlocked: Bool
 
-    @State private var selectedLine: MetroLine?
+    let alreadyUnlocked: Bool
+    let isCompleted: Bool
+    let isSacrificed: Bool
+
+    let controllingTeamName: String?
+    let currentChallenge: GameChallenge?
+    let completedByTeamID: String?
+    let teamNames: [String: String]
+    let myTeamID: String
+
+    @State private var isUnlocking = false
 
     var body: some View {
-        NavigationView {
-            VStack(spacing: 20) {
-                Text(station.name).font(.largeTitle)
+        VStack(spacing: 16) {
+            Text(station.name)
+                .font(.largeTitle)
+                .bold()
+                .padding(.top)
 
-                if station.lines.count > 1 {
-                    Picker("Choose Line", selection: $selectedLine) {
-                        ForEach(station.lines, id: \.self) { line in
-                            Text(line.rawValue).tag(line)
+            Text("Status: \(statusText)")
+                .font(.headline)
+                .foregroundColor(statusColor)
+
+            if let team = controllingTeamName {
+                Text("Controlled by: \(team)")
+                    .font(.subheadline)
+            }
+
+            if let challenge = currentChallenge {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Challenge").bold()
+                    Text(challenge.title)
+                    Text(challenge.description)
+                        .font(.subheadline)
+                        .foregroundColor(.gray)
+
+                    if let completedTeam = completedByTeamID {
+                        Text("Completed by: \(teamNames[completedTeam] ?? completedTeam)")
+                            .font(.caption)
+                            .foregroundColor(.green)
+                    }
+                }
+                .padding()
+                .background(Color.gray.opacity(0.1))
+                .cornerRadius(10)
+            }
+
+            if !alreadyUnlocked && !isCompleted && !isSacrificed && completedByTeamID == nil {
+                VStack(spacing: 8) {
+                    ForEach(station.lines, id: \.self) { line in
+                        Button(action: {
+                            guard !isUnlocking else { return }
+                            isUnlocking = true
+                            onUnlock(line)
+                        }) {
+                            Text("Unlock on \(line.rawValue) Line")
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(line.color)
+                                .foregroundColor(.white)
+                                .cornerRadius(8)
                         }
                     }
-                    .pickerStyle(SegmentedPickerStyle())
-                    .padding()
-                } else {
-                    Text("Line: \(station.lines.first!.rawValue)")
-                        .font(.headline)
-                    // Auto-select single line
-                    Color.clear.onAppear {
-                        selectedLine = station.lines.first
-                    }
-                }
-
-                if alreadyUnlocked {
-                    Text("✅ Challenge already unlocked")
-                        .font(.headline)
-                        .foregroundColor(.green)
-                } else {
-                    Button("Unlock Challenge") {
-                        if let selected = selectedLine {
-                            onUnlock(selected)
-                            onClose()
-                        }
-                    }
-                    .disabled(selectedLine == nil)
-                    .padding()
-                    .frame(maxWidth: .infinity)
-                    .background(selectedLine == nil ? Color.gray : Color.blue)
-                    .foregroundColor(.white)
-                    .cornerRadius(10)
-                    .padding(.horizontal)
-                }
-
-                Spacer()
-            }
-            .padding()
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Back", action: onClose)
                 }
             }
+
+            Button("Close") {
+                onClose()
+            }
+            .foregroundColor(.blue)
+            .padding(.top)
+
+            Spacer()
+        }
+        .padding()
+    }
+
+    private var statusText: String {
+        if let completedBy = completedByTeamID {
+            return completedBy == myTeamID ? "Completed" : "Lost"
+        } else if isSacrificed {
+            return "Sacrificed"
+        } else if alreadyUnlocked {
+            return "Unlocked"
+        } else {
+            return "Locked"
+        }
+    }
+
+    private var statusColor: Color {
+        if let completedBy = completedByTeamID {
+            return completedBy == myTeamID ? .green : .red
+        } else if isSacrificed {
+            return .red
+        } else if alreadyUnlocked {
+            return .orange
+        } else {
+            return .gray
         }
     }
 }

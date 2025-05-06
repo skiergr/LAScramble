@@ -32,7 +32,7 @@ struct CreateGameView: View {
         .fullScreenCover(isPresented: Binding(get: {
             gameCreated && !gameID.isEmpty && !teamID.isEmpty
         }, set: { _ in })) {
-            MainGameScreenView(gameID: gameID, teamID: teamID)
+            LobbyView(gameID: gameID, teamID: teamID)
         }
     }
 
