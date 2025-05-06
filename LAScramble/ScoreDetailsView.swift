@@ -21,7 +21,7 @@ struct ScoreDetailsView: View {
                         } else {
                             ForEach(allTeams, id: \.self) { teamID in
                                 let count = teamLineCounts[teamID]?[line] ?? 0
-                                let teamLabel = teamNames[teamID] ?? teamID
+                                let teamLabel = teamNames[teamID] ?? "Team \(teamID.prefix(6))"
                                 HStack {
                                     Text(teamLabel)
                                     Spacer()
@@ -38,4 +38,3 @@ struct ScoreDetailsView: View {
         }
     }
 }
-

@@ -33,7 +33,7 @@ struct JoinGameView: View {
         }
         .onAppear(perform: fetchGames)
         .fullScreenCover(item: $joinedTeamIDWrapper) { wrapper in
-            MainGameScreenView(gameID: wrapper.gameID, teamID: wrapper.teamID)
+            LobbyView(gameID: wrapper.gameID, teamID: wrapper.teamID)
         }
     }
 
