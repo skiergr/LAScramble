@@ -19,14 +19,14 @@ struct LobbyView: View {
 
     var body: some View {
         VStack {
-            Text("🕹️ Lobby").font(.largeTitle).padding()
+            Text("Lobby").font(.largeTitle).padding()
 
             ScrollView {
                 ForEach(teams.keys.sorted(), id: \.self) { team in
                     VStack(alignment: .leading) {
                         Text(team).font(.headline)
                         ForEach(teams[team] ?? [], id: \.self) { player in
-                            Text("👤 \(player)")
+                            Text("\(player)")
                         }
                     }
                     .padding()
@@ -65,8 +65,6 @@ struct LobbyView: View {
         teamsRef.addSnapshotListener { snapshot, _ in
             guard let teamDocs = snapshot?.documents else { return }
 
-            var updatedTeams: [String: [String]] = [:]
-
             for doc in teamDocs {
                 let teamID = doc.documentID
                 let teamName = doc.data()["teamName"] as? String ?? teamID
@@ -80,14 +78,12 @@ struct LobbyView: View {
                         } ?? []
 
                         DispatchQueue.main.async {
-                            updatedTeams[teamName] = usernames
-                            self.teams = updatedTeams
+                            self.teams[teamName] = usernames
                         }
                     }
             }
         }
     }
-
 
     func checkIfCreator() {
         guard let uid = Auth.auth().currentUser?.uid else { return }

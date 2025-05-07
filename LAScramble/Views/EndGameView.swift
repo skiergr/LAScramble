@@ -20,16 +20,16 @@ struct EndGameView: View {
     
     var body: some View {
         VStack(spacing: 16) {
-            Text("🏁 Game Over").font(.largeTitle).bold()
+            Text("Game Over").font(.largeTitle).bold()
 
             if let winner = winnerTeamID {
-                Text("🥇 Winner: \(teamNames[winner] ?? winner)").font(.title2).padding()
+                Text("Winner: \(teamNames[winner] ?? winner)").font(.title2).padding()
             }
 
             ScrollView {
                 ForEach(teamNames.keys.sorted(), id: \.self) { teamID in
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("🏷️ \(teamNames[teamID] ?? teamID)").font(.headline)
+                        Text("\(teamNames[teamID] ?? teamID)").font(.headline)
 
                         if let lineData = teamLineCounts[teamID] {
                             ForEach(MetroLine.allCases, id: \.self) { line in
@@ -38,7 +38,7 @@ struct EndGameView: View {
                             }
                         }
 
-                        Text("✅ Challenges Completed: \(teamChallengeCounts[teamID] ?? 0)")
+                        Text("Challenges Completed: \(teamChallengeCounts[teamID] ?? 0)")
                     }
                     .padding()
                     .background(Color(UIColor.secondarySystemBackground))
@@ -47,7 +47,7 @@ struct EndGameView: View {
                 }
             }
 
-            Button("🏠 Return to Home") {
+            Button("Return to Home") {
                 presentationMode.wrappedValue.dismiss()
             }
             .padding()

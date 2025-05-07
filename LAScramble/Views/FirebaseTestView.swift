@@ -23,9 +23,9 @@ struct FirebaseTestView: View {
                     "message": "Hello from LA Scramble!"
                 ]) { error in
                     if let error = error {
-                        message = "❌ Error: \(error.localizedDescription)"
+                        message = "Error: \(error.localizedDescription)"
                     } else {
-                        message = "✅ Firestore write successful!"
+                        message = "Firestore write successful!"
                     }
                 }
             }

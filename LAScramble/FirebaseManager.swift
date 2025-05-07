@@ -16,7 +16,7 @@ class FirebaseManager {
             .collection("unlockedChallenges")
             .addDocument(data: data) { error in
                 if let error = error {
-                    print("❌ Firestore save failed: \(error.localizedDescription)")
+                    print("Firestore save failed: \(error.localizedDescription)")
                 }
             }
     }

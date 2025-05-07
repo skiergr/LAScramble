@@ -10,7 +10,7 @@ import SwiftUI
 struct MissionView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("🎯 Purpose / Mission")
+            Text("Purpose / Mission")
                 .font(.largeTitle)
                 .padding(.bottom)
 

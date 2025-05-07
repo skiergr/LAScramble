@@ -7,7 +7,7 @@ struct ScoreboardHeaderView: View {
 
     var body: some View {
         VStack(spacing: 4) {
-            Text("🏁 Line Control")
+            Text("Line Control")
                 .font(.headline)
 
             HStack {

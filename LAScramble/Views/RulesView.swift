@@ -10,7 +10,7 @@ import SwiftUI
 struct RulesView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("📜 Rules")
+            Text("Rules")
                 .font(.largeTitle)
                 .padding(.bottom)
 

@@ -3,22 +3,23 @@ import SwiftUI
 struct ChallengePopupView: View {
     let challenge: GameChallenge
     var onComplete: () -> Void
+    var onSacrifice: () -> Void
     var onClose: () -> Void
 
     var body: some View {
         NavigationView {
-            VStack(spacing: 12) {
+            VStack(spacing: 16) {
                 Text(challenge.title)
                     .font(.title2)
                     .bold()
 
-                Text("📍 \(challenge.station)")
+                Text(challenge.station)
                     .font(.caption)
                     .foregroundColor(.gray)
 
                 Text(challenge.description)
                     .font(.body)
-                    .padding()
+                    .padding(.horizontal)
 
                 Button("✅ Mark as Complete") {
                     onComplete()
@@ -26,6 +27,15 @@ struct ChallengePopupView: View {
                 .padding()
                 .frame(maxWidth: .infinity)
                 .background(Color.green)
+                .foregroundColor(.white)
+                .cornerRadius(8)
+
+                Button("⚠️ Sacrifice This Challenge") {
+                    onSacrifice()
+                }
+                .padding()
+                .frame(maxWidth: .infinity)
+                .background(Color.red)
                 .foregroundColor(.white)
                 .cornerRadius(8)
 

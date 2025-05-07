@@ -18,23 +18,23 @@ struct GameMenuView: View {
 
                 Group {
                     NavigationLink(destination: CreateGameView()) {
-                        menuButtonLabel("➕ Create Game", color: .green)
+                        menuButtonLabel("Create Game", color: .green)
                     }
 
                     NavigationLink(destination: JoinGameView()) {
-                        menuButtonLabel("🔗 Join Game", color: .blue)
+                        menuButtonLabel("Join Game", color: .blue)
                     }
 
                     NavigationLink(destination: GalleryView()) {
-                        menuButtonLabel("📸 Gallery", color: .purple)
+                        menuButtonLabel("Gallery", color: .purple)
                     }
 
                     NavigationLink(destination: RulesView()) {
-                        menuButtonLabel("📜 Rules", color: .orange)
+                        menuButtonLabel("Rules", color: .orange)
                     }
 
                     NavigationLink(destination: MissionView()) {
-                        menuButtonLabel("🎯 Purpose / Mission", color: .gray)
+                        menuButtonLabel("Purpose / Mission", color: .gray)
                     }
                 }
 

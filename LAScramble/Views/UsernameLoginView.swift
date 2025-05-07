@@ -31,7 +31,7 @@ struct UsernameLoginView: View {
             .cornerRadius(8)
 
             if let error = errorMessage {
-                Text("⚠️ \(error)")
+                Text("\(error)")
                     .foregroundColor(.red)
             }
         }

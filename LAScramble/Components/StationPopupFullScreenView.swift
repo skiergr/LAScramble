@@ -5,12 +5,10 @@ struct StationPopupFullScreenView: View {
     let onUnlock: (MetroLine) -> Void
     let onClose: () -> Void
     let isSacrificed: Bool
-
     let controllingTeamName: String?
     let teamNames: [String: String]
     let myTeamID: String
     let selectedLine: MetroLine
-
     let allUnlocked: [GameChallenge]
     let allCompleted: [GameChallenge]
     let globalCompleted: [GameChallenge]
@@ -44,7 +42,6 @@ struct StationPopupFullScreenView: View {
         self.myTeamID = myTeamID
         self.selectedLine = selectedLine
         self._currentLine = State(initialValue: selectedLine)
-
         self.allUnlocked = allUnlocked
         self.allCompleted = allCompleted
         self.globalCompleted = globalCompleted
@@ -119,6 +116,13 @@ struct StationPopupFullScreenView: View {
                 }
             }
 
+            if isSacrificed {
+                Text("You sacrificed this station. You cannot unlock its challenge.")
+                    .font(.footnote)
+                    .foregroundColor(.red)
+                    .padding(.top, 8)
+            }
+
             Button("Close") {
                 onClose()
             }
@@ -130,7 +134,7 @@ struct StationPopupFullScreenView: View {
         .padding()
     }
 
-    // MARK: - Derived Logic Based on currentLine
+    // MARK: - Derived Logic
 
     private var isUnlocked: Bool {
         allUnlocked.contains { $0.station == station.name && $0.line == currentLine }

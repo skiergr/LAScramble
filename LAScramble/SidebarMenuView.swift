@@ -12,7 +12,7 @@ struct SidebarMenuView: View {
     var gameID: String
     var teamID: String
     var teamNames: [String: String]
-    var teamLineCounts: [String: [MetroLine: Int]] // ✅ NEW
+    var teamLineCounts: [String: [MetroLine: Int]] // NEW
 
     @State private var showLeaderboard = false
     @State private var showRules = false
@@ -22,13 +22,13 @@ struct SidebarMenuView: View {
         NavigationView {
             List {
                 Section(header: Text("Game Menu")) {
-                    Button("📊 Leaderboard") { showLeaderboard = true }
-                    Button("🏁 Completed Challenges") {
+                    Button("Leaderboard") { showLeaderboard = true }
+                    Button("Completed Challenges") {
                         // Could push a ChallengeListView here
                     }
-                    Button("📜 Rules") { showRules = true }
-                    Button("🚇 Metro Help") { showHelp = true }
-                    Button("❌ Forfeit Game") {
+                    Button("Rules") { showRules = true }
+                    Button("Metro Help") { showHelp = true }
+                    Button("Forfeit Game") {
                         forfeitGame()
                     }
                     .foregroundColor(.red)
@@ -37,7 +37,7 @@ struct SidebarMenuView: View {
             .navigationTitle("Menu")
             .navigationBarTitleDisplayMode(.inline)
 
-            // ✅ Sheets
+            // Sheets
             .sheet(isPresented: $showLeaderboard) {
                 ScoreDetailsView(
                     teamLineCounts: teamLineCounts,
@@ -45,11 +45,11 @@ struct SidebarMenuView: View {
                 )
             }
             .sheet(isPresented: $showRules) {
-                Text("📜 Game Rules Go Here")
+                Text("Game Rules Go Here")
                     .padding()
             }
             .sheet(isPresented: $showHelp) {
-                Text("🚇 Metro Help Content Here")
+                Text("Metro Help Content Here")
                     .padding()
             }
         }
@@ -61,6 +61,6 @@ struct SidebarMenuView: View {
             .collection("teams").document(teamID)
             .updateData(["forfeited": true])
 
-        print("🚨 Team \(teamID) forfeited the game")
+        print("Team \(teamID) forfeited the game")
     }
 }

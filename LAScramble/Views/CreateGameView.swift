@@ -24,7 +24,7 @@ struct CreateGameView: View {
             .padding(.horizontal)
 
             if let error = errorMessage {
-                Text("⚠️ \(error)")
+                Text("\(error)")
                     .foregroundColor(.red)
             }
         }

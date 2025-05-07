@@ -14,7 +14,7 @@ struct JoinGameView: View {
                 .padding()
 
             if let error = errorMessage {
-                Text("⚠️ \(error)")
+                Text("\(error)")
                     .foregroundColor(.red)
             }
 
