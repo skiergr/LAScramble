@@ -23,14 +23,14 @@ struct SidebarMenuView: View {
             List {
                 Section(header: Text("Game Menu")) {
                     Button("Leaderboard") { showLeaderboard = true }
-                    Button("Completed Challenges") {
+                    /*Button("Completed Challenges") {
                         // Could push a ChallengeListView here
                     }
                     Button("Rules") { showRules = true }
                     Button("Metro Help") { showHelp = true }
                     Button("Forfeit Game") {
                         forfeitGame()
-                    }
+                    }*/
                     .foregroundColor(.red)
                 }
             }

@@ -861,7 +861,7 @@ struct MainGameScreenView: View {
                             let totalLines = station.lines.count
                             let startAngle = Angle(degrees: (360.0 / Double(totalLines)) * Double(index) - 90)
                             let endAngle = Angle(degrees: (360.0 / Double(totalLines)) * Double(index + 1) - 90)
-                            let midAngle = Angle(degrees: (startAngle.degrees + endAngle.degrees) / 2)
+
 
                             // Arc
                             let arcPath = Path { path in
@@ -974,7 +974,7 @@ struct MainGameScreenView: View {
         sacrificedStations.insert(challenge.station)
 
         if let line = challenge.line {
-            sacrificedLineLocks[line] = Date().addingTimeInterval(20 * 60) // 20 min
+            sacrificedLineLocks[line] = Date().addingTimeInterval(20*60) // 20 min
         }
 
         // ✅ Remove from unlockedChallenges
@@ -1038,7 +1038,7 @@ struct MainGameScreenView: View {
 
                     if let line = MetroLine(rawValue: lineRaw) {
                         stations.insert(station)
-                        locks[line] = timestamp.addingTimeInterval(20 * 60)
+                        locks[line] = timestamp.addingTimeInterval(20*60)
                         
                         // ✅ Add to sacrificed challenges array
                         sacrificed.append(GameChallenge(

@@ -19,7 +19,12 @@ struct LobbyView: View {
 
     var body: some View {
         VStack {
-            Text("Lobby").font(.largeTitle).padding()
+            Text("Lobby").font(.largeTitle).padding(.top)
+
+            Text("Game ID: \(gameID)")
+                .font(.subheadline)
+                .foregroundColor(.gray)
+                .padding(.bottom, 8)
 
             ScrollView {
                 ForEach(teams.keys.sorted(), id: \.self) { team in
@@ -46,7 +51,6 @@ struct LobbyView: View {
                 .cornerRadius(8)
                 .padding()
             }
-
         }
         .onAppear {
             fetchTeamsAndPlayersLive()
