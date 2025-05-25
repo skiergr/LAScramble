@@ -9,45 +9,37 @@ struct GameChallenge: Identifiable, Equatable {
 }
 
 let sampleChallenges: [GameChallenge] = [
-    // Mariachi Plaza (E & B)
-    GameChallenge(title: "Strike a Pose", description: "Take a funny group photo at Mariachi Plaza.", station: "Mariachi Plaza", line: .E),
-    GameChallenge(title: "Mariachi Music Hunt", description: "Find a poster or sign referencing music nearby.", station: "Mariachi Plaza", line: .E),
-    GameChallenge(title: "Cultural Colors", description: "Find something colorful that represents local culture.", station: "Mariachi Plaza", line: .E),
-    GameChallenge(title: "Strike a Pose", description: "Take a funny group photo at Mariachi Plaza.", station: "Mariachi Plaza", line: .B),
-    GameChallenge(title: "Mariachi Music Hunt", description: "Find a poster or sign referencing music nearby.", station: "Mariachi Plaza", line: .B),
-    GameChallenge(title: "Cultural Colors", description: "Find something colorful that represents local culture.", station: "Mariachi Plaza", line: .B),
-
-    // Expo/Vermont
-    GameChallenge(title: "Local History", description: "Find and record a short video explaining a nearby mural.", station: "Expo/Vermont", line: .E),
-    GameChallenge(title: "Trojan Spotting", description: "Find USC colors, logos, or students and take a pic.", station: "Expo/Vermont", line: .E),
-    GameChallenge(title: "Campus Vibes", description: "Interview a student about their favorite class.", station: "Expo/Vermont", line: .E),
-
-    // Hollywood/Vine
-    GameChallenge(title: "Metro Selfie", description: "Snap a selfie with a Metro worker (with permission!).", station: "Hollywood/Vine", line: .B),
-    GameChallenge(title: "Star Search", description: "Find a Walk of Fame star and pose with it.", station: "Hollywood/Vine", line: .B),
-    GameChallenge(title: "Movie Buff", description: "Name 3 movies that were filmed near this station.", station: "Hollywood/Vine", line: .B),
-
-    // Grand/LATTC
-    GameChallenge(title: "Train Trivia", description: "Ask a stranger on the platform to share a fact about LA.", station: "Grand/LATTC", line: .A),
-    GameChallenge(title: "Tech & Trade", description: "Find a tool or item that symbolizes a trade skill.", station: "Grand/LATTC", line: .A),
-    GameChallenge(title: "Public Art", description: "Locate and take a photo with a piece of station art.", station: "Grand/LATTC", line: .A),
-
-    // Pico
-    GameChallenge(title: "Soundtrack Time", description: "Play a song that fits the mood of the station and dance for 10 seconds.", station: "Pico", line: .E),
-    GameChallenge(title: "Sports Spot", description: "Find something related to the Lakers or Clippers nearby.", station: "Pico", line: .E),
-    GameChallenge(title: "Convention Quest", description: "Snap a photo with a nearby convention-goer.", station: "Pico", line: .E),
-
-    // Union Station (B & D)
-    GameChallenge(title: "Union Welcome", description: "Capture a photo of someone arriving or leaving by train.", station: "Union Station", line: .B),
-    GameChallenge(title: "Union Welcome", description: "Capture a photo of someone arriving or leaving by train.", station: "Union Station", line: .D),
-    GameChallenge(title: "Ticket Hunt", description: "Find an old or unique Metro or Amtrak ticket.", station: "Union Station", line: .D),
-
-    // Pershing Square (D)
-    GameChallenge(title: "Skyscraper Selfie", description: "Take a selfie with the tallest building in view.", station: "Pershing Square", line: .D),
-    GameChallenge(title: "Public Protest", description: "Find a sign or mural related to a social movement.", station: "Pershing Square", line: .D),
-
-    // 7th Street/Metro Center (A & D)
-    GameChallenge(title: "Transit Hub", description: "Document three different transit types visible here.", station: "7th Street/Metro Center", line: .A),
-    GameChallenge(title: "Commute Mood", description: "Ask a commuter how they pass time on the Metro.", station: "7th Street/Metro Center", line: .A),
-    GameChallenge(title: "Rush Hour Hustle", description: "Capture the energy of a crowded moment.", station: "7th Street/Metro Center", line: .D)
+    GameChallenge(title: "Graffiti Challenge", description: "Find a Metro sign or graffiti tag near LATTC.", station: "Grand/LATTC", line: .A),
+    GameChallenge(title: "Historical Challenge", description: "Find a historical marker or plaque in Heritage Square.", station: "Heritage Sq", line: .A),
+    GameChallenge(title: "Lantern Challenge", description: "Find a dragon or red lantern in Chinatown.", station: "Chinatown", line: .A),
+    GameChallenge(title: "Marquee Challenge", description: "Find an old theater marquee.", station: "Historic Broadway", line: .A),
+    GameChallenge(title: "Mochi Challenge", description: "Find a mochi shop in Little Tokyo.", station: "Little Tokyo/Arts Dist", line: .A),
+    GameChallenge(title: "Mural Challenge", description: "Find a mural or train near the LA River bike path.", station: "Lincoln/Cypress", line: .A),
+    GameChallenge(title: "Performance Challenge", description: "Find a fountain near The Broad.", station: "Grand Av Arts/Bunker Hill", line: .A),
+    GameChallenge(title: "Poster Challenge", description: "Find a sports jersey near Crypto.com Arena.", station: "Pico", line: .A),
+    GameChallenge(title: "Reflection Challenge", description: "Find a dramatic reflection photo of the lake.", station: "Westlake/MacArthur Park", line: .D),
+    GameChallenge(title: "Signage Challenge", description: "Find a courthouse sign or public art.", station: "Civic Ctr/Grand Park", line: .D),
+    GameChallenge(title: "Star Challenge", description: "Find a Walk of Fame star for someone you’ve heard of.", station: "Hollywood/Vine", line: .B),
+    GameChallenge(title: "Staircase Challenge", description: "Find a staircase mural or street musician.", station: "Grand Av Arts/Bunker Hill", line: .E),
+    GameChallenge(title: "Sticker Challenge", description: "Find a food truck or rally near the Rose Garden.", station: "Expo/Vermont", line: .E),
+    GameChallenge(title: "Student Challenge", description: "Find a USC sign or student-related reference.", station: "Jefferson/USC", line: .E),
+    GameChallenge(title: "Transfer Challenge", description: "Find a Metro transfer sign.", station: "Wilshire/Vermont", line: .B),
+    GameChallenge(title: "Vending Challenge", description: "Find a paddle boat or vendor.", station: "Westlake/MacArthur Park", line: .B),
+    GameChallenge(title: "Vintage Challenge", description: "Find a vintage store or Thai food sign nearby.", station: "Hollywood/Western", line: .B),
+    GameChallenge(title: "Visuals Challenge", description: "Find a painted alley in the Arts District.", station: "Little Tokyo/Arts Dist", line: .E),
+    GameChallenge(title: "Volunteer Challenge", description: "Find a dinosaur, rocket, or science museum object.", station: "Expo Park/USC", line: .E),
+    GameChallenge(title: "Wellness Challenge", description: "Find a hospital sign from Kaiser or a health-related object.", station: "Vermont/Sunset", line: .B),
+    GameChallenge(title: "Window Challenge", description: "Find a bookstore or creative window display.", station: "Vermont/Beverly", line: .B),
+    GameChallenge(title: "Words Challenge", description: "Find a neon sign or taco stand nearby.", station: "Vermont/Santa Monica", line: .B),
+    GameChallenge(title: "Zone Challenge", description: "Find a Korean sign or business with Hangul writing.", station: "Wilshire/Normandie", line: .D),
+    GameChallenge(title: "Broadway Challenge", description: "Find a historic building plaque.", station: "Historic Broadway", line: .E),
+    GameChallenge(title: "Bus Challenge", description: "Find a Metro bus connection map or transfer sign.", station: "Wilshire/Vermont", line: .D),
+    GameChallenge(title: "Chess Challenge", description: "Find a chess game or protest sign.", station: "Pershing Square", line: .B),
+    GameChallenge(title: "Concert Challenge", description: "Find a concert poster or merch nearby.", station: "Pico", line: .E),
+    GameChallenge(title: "K-Town Challenge", description: "Find a karaoke place or beauty store in Koreatown.", station: "Wilshire/Western", line: .D),
+    GameChallenge(title: "Medical Challenge", description: "Find a medical or training facility label nearby.", station: "LATTC/Ortho Institute", line: .E),
+    GameChallenge(title: "Mural Challenge", description: "Find a local mural or a Metro bridge near the station.", station: "Pico/Aliso", line: .E),
+    GameChallenge(title: "Music Challenge", description: "Find a mariachi band reference or musical image.", station: "Mariachi Plaza", line: .E),
+    GameChallenge(title: "Park Challenge", description: "Find a protest sign or group at Grand Park.", station: "Civic Ctr/Grand Park", line: .B),
+    GameChallenge(title: "Purple Challenge", description: "Find a purple flower or purple item nearby.", station: "Pershing Square", line: .D),
 ]

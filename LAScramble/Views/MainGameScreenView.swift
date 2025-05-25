@@ -24,7 +24,6 @@ struct MainGameScreenView: View {
     @State private var timerEnded = false
     let gameDuration: TimeInterval = 2*60*60;
     @State private var timer: Timer?
-   
     @State private var selectedLine: MetroLine?
     
     @State private var showAlert = false
@@ -33,6 +32,8 @@ struct MainGameScreenView: View {
     @State private var sacrificedStations: Set<String> = []
     @State private var sacrificedLineLocks: [MetroLine: Date] = [:]
     @State private var sacrificedChallenges: [GameChallenge] = []
+    
+    @State private var teamColors: [String: Color] = [:]
     
     var body: some View {
         Group {
@@ -69,19 +70,19 @@ struct MainGameScreenView: View {
             )
         }
     }
-
+    
     // MARK: - Components
-
+    
     private var errorView: some View {
         VStack {
             Text("Error: Game ID or Team ID missing.")
             Text("gameID=\(gameID), teamID=\(teamID)")
         }
     }
-
+    
     private func stationPopup(station: Station) -> some View {
         let line = selectedLine ?? station.lines.first!
-
+        
         return StationPopupFullScreenView(
             station: station,
             onUnlock: { selectedLine in
@@ -119,7 +120,7 @@ struct MainGameScreenView: View {
             onClose: { selectedChallenge = nil }
         )
     }
-
+    
     private func setupListeners() {
         listenForUnlockedChallenges()
         listenForCompletedChallenges()
@@ -132,19 +133,27 @@ struct MainGameScreenView: View {
         fetchTeamNames()
         fetchStartTimeAndBeginTimer()
         startLineControlListener()
+        fetchTeamColors()
     }
-
-
+    
+    
     // MARK: - Main Game UI Extracted to Reduce Complexity
     private var mainGameContent: some View {
         VStack(spacing: 0) {
             HStack {
-                VStack(alignment: .leading) {
-                    Text("\(teamName)").font(.headline)
-                    Text("\(formatTime(timeRemaining))")
-                        .font(.subheadline)
-                        .foregroundColor(.gray)
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(teamColors[teamID] ?? .gray)
+                        .frame(width: 10, height: 10)
+                    
+                    Text(teamName)
+                        .font(.headline)
                 }
+                .padding(.bottom, 2)
+                
+                Text("\(formatTime(timeRemaining))")
+                    .font(.subheadline)
+                    .foregroundColor(.gray)
                 if let lockedLine = sacrificedLineLocks.first(where: { $0.value > Date() }) {
                     Spacer()
                     let minutesLeft = Int(lockedLine.value.timeIntervalSinceNow) / 60
@@ -160,43 +169,68 @@ struct MainGameScreenView: View {
                 }
             }
             .padding(.horizontal)
-
-
+            
+            
             ScoreboardHeaderView(controlledLineCounts: controlledLineCounts, teamNames: teamNames) {
                 showScoreDetails = true
             }
-
+            
             metroMapView
             Divider()
             challengeListView
         }
     }
-
+    
     private var metroMapView: some View {
         ZStack {
             ZoomableScrollView {
-                ZStack {
-                    Image("metro_map")
-                        .resizable()
-                        .scaledToFit()
-
-                    ForEach(sampleStations) { station in
-                        Button(action: {
-                            selectedLine = station.lines.first
-                            selectedStation = station
-                        }) {
-                            StationDotView(
-                                station: station,
-                                globallyCompleted: globallyCompleted,
-                                sacrificedStations: sacrificedStations,
-                                completedChallenges: completedChallenges,
-                                sacrificedLineLocks: sacrificedLineLocks,
-                                teamID: teamID,
-                                allTeamCompletions: allTeamCompletions
+                GeometryReader { geometry in
+                    ZStack {
+                        Image("metro_map")
+                            .resizable()
+                            .scaledToFit()
+                            .overlay(
+                                GeometryReader { geo in
+                                    Color.clear
+                                        .contentShape(Rectangle())
+                                        .gesture(
+                                            DragGesture(minimumDistance: 0)
+                                                .onEnded { value in
+                                                    let tappedX = value.location.x
+                                                    let tappedY = value.location.y
+                                                    
+                                                    let normalizedX = tappedX / geo.size.width * 1106
+                                                    let normalizedY = tappedY / geo.size.height * 853
+                                                    
+                                                    print("Tapped at raw: x=\(Int(tappedX)), y=\(Int(tappedY))")
+                                                    print("Normalized for sampleStations: x=\(Int(normalizedX)), y=\(Int(normalizedY))")
+                                                }
+                                        )
+                                }
                             )
 
+                        ForEach(sampleStations) { station in
+                            Button(action: {
+                                selectedLine = station.lines.first
+                                selectedStation = station
+                            }) {
+                                StationDotView(
+                                    station: station,
+                                    globallyCompleted: globallyCompleted,
+                                    sacrificedStations: sacrificedStations,
+                                    completedChallenges: completedChallenges,
+                                    unlockedChallenges: unlockedChallenges,
+                                    allTeamCompletions: allTeamCompletions,
+                                    otherTeamsUnlocked: otherTeamsUnlocked,
+                                    teamID: teamID,
+                                    teamColors: teamColors
+                                )
+                            }
+                            .position(
+                                x: geometry.size.width * (station.x / 1106),
+                                y: geometry.size.height * (station.y / 853)
+                            )
                         }
-                        .position(x: station.x, y: station.y)
                     }
                 }
             }
@@ -205,25 +239,26 @@ struct MainGameScreenView: View {
         .frame(height: UIScreen.main.bounds.height * 0.35)
     }
 
+    
     struct ZoomableScrollView<Content: View>: View {
         @State private var scale: CGFloat = 1.0
         @State private var lastScale: CGFloat = 1.0
         @State private var offset: CGSize = .zero
         @State private var lastOffset: CGSize = .zero
-
+        
         private let minScale: CGFloat = 1.0
         private let maxScale: CGFloat = 3.0
-
+        
         let content: Content
-
+        
         init(@ViewBuilder content: () -> Content) {
             self.content = content()
         }
-
+        
         var body: some View {
             GeometryReader { geometry in
                 let containerSize = geometry.size
-
+                
                 content
                     .scaleEffect(scale)
                     .offset(offset)
@@ -257,24 +292,24 @@ struct MainGameScreenView: View {
                     .animation(.easeInOut(duration: 0.2), value: scale)
             }
         }
-
+        
         // MARK: - Clamping Helper
         private func clampedOffset(_ proposed: CGSize? = nil, in containerSize: CGSize) -> CGSize {
             let proposedOffset = proposed ?? offset
-
+            
             let contentWidth = containerSize.width * scale
             let contentHeight = containerSize.height * scale
-
+            
             let maxX = max((contentWidth - containerSize.width) / 2, 0)
             let maxY = max((contentHeight - containerSize.height) / 2, 0)
-
+            
             let clampedX = min(max(proposedOffset.width, -maxX), maxX)
             let clampedY = min(max(proposedOffset.height, -maxY), maxY)
-
+            
             return CGSize(width: clampedX, height: clampedY)
         }
     }
-
+    
     private var challengeListView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {
@@ -284,7 +319,7 @@ struct MainGameScreenView: View {
                         $0.title == challenge.title && $0.station == challenge.station
                     }) && !sacrificedStations.contains(challenge.station)
                 }
-
+                
                 if !activeChallenges.isEmpty {
                     Text("Active Challenges").font(.headline)
                     ForEach(activeChallenges) { challenge in
@@ -300,7 +335,7 @@ struct MainGameScreenView: View {
                         }
                     }
                 }
-
+                
                 // Completed Challenges
                 if !completedChallenges.isEmpty {
                     Text("Completed Challenges").font(.headline)
@@ -315,7 +350,7 @@ struct MainGameScreenView: View {
                         .cornerRadius(10)
                     }
                 }
-
+                
                 // Challenges Unlocked by Other Teams
                 let others = otherTeamsUnlocked
                     .flatMap { (teamID, list) in list.map { (teamID, $0) } }
@@ -323,7 +358,7 @@ struct MainGameScreenView: View {
                         !unlockedChallenges.contains { $0.title == ch.title && $0.station == ch.station } &&
                         !globallyCompleted.contains { $0.title == ch.title && $0.station == ch.station }
                     }
-
+                
                 if !others.isEmpty {
                     Text("Challenges Unlocked by Other Teams").font(.headline)
                     ForEach(others, id: \.1.id) { (tid, ch) in
@@ -338,12 +373,12 @@ struct MainGameScreenView: View {
                         .cornerRadius(10)
                     }
                 }
-
+                
                 // Completed by Other Teams
                 let completedByOthers = globallyCompleted.filter {
                     !completedChallenges.contains($0)
                 }
-
+                
                 if !completedByOthers.isEmpty {
                     Text("Completed by Other Teams").font(.headline)
                     ForEach(completedByOthers) { challenge in
@@ -357,7 +392,7 @@ struct MainGameScreenView: View {
                         .cornerRadius(10)
                     }
                 }
-
+                
                 // Sacrificed Challenges
                 if !sacrificedChallenges.isEmpty {
                     Text("Sacrificed Challenges").font(.headline)
@@ -372,29 +407,29 @@ struct MainGameScreenView: View {
                         .cornerRadius(10)
                     }
                 }
-
+                
             }
             .padding()
         }
     }
-
-
+    
+    
     func updateLineControlScores() {
         let db = Firestore.firestore()
         let teamsRef = db.collection("games").document(gameID).collection("teams")
-
+        
         teamsRef.getDocuments { snapshot, _ in
             guard let docs = snapshot?.documents else { return }
-
+            
             var counts: [String: [MetroLine: Set<String>]] = [:]
-
+            
             for doc in docs {
                 let teamID = doc.documentID
                 let completedRef = teamsRef.document(teamID).collection("completedChallenges")
-
+                
                 completedRef.getDocuments { snap, _ in
                     guard let challengeDocs = snap?.documents else { return }
-
+                    
                     for c in challengeDocs {
                         let station = c.data()["station"] as? String ?? ""
                         let lineRaw = c.data()["line"] as? String ?? ""
@@ -402,7 +437,7 @@ struct MainGameScreenView: View {
                             counts[teamID, default: [:]][line, default: []].insert(station)
                         }
                     }
-
+                    
                     DispatchQueue.main.async {
                         // Convert station sets to counts
                         var lineCounts: [String: [MetroLine: Int]] = [:]
@@ -412,7 +447,7 @@ struct MainGameScreenView: View {
                             }
                         }
                         self.teamLineCounts = lineCounts
-
+                        
                         // Force team name re-fetch
                         fetchTeamNames()
                     }
@@ -420,7 +455,7 @@ struct MainGameScreenView: View {
             }
         }
     }
-
+    
     func unlockChallenge(for station: Station, on line: MetroLine) {
         if sacrificedStations.contains(station.name) {
             alertMessage = "You sacrificed this station and can’t unlock it again."
@@ -430,7 +465,7 @@ struct MainGameScreenView: View {
             }
             return
         }
-
+        
         if let lockUntil = sacrificedLineLocks[line], lockUntil > Date() {
             let minutes = Int(lockUntil.timeIntervalSinceNow) / 60
             alertMessage = "You sacrificed a challenge on this line. Try again in \(minutes) minutes."
@@ -440,11 +475,11 @@ struct MainGameScreenView: View {
             }
             return
         }
-
+        
         print("Attempting to unlock challenge for station: \(station.name) on line \(line.rawValue)")
-
+        
         let db = Firestore.firestore()
-
+        
         // Use both station + line in the global ID
         let safeStationLineID = "\(station.name)_\(line.rawValue)"
             .replacingOccurrences(of: "[^a-zA-Z0-9_]+", with: "_", options: .regularExpression)
@@ -458,7 +493,7 @@ struct MainGameScreenView: View {
                 $0.station == challenge.station && $0.title == challenge.title && $0.line == challenge.line
             })
         }
-
+        
         if activeUnlocked.count >= 2 {
             selectedStation = nil
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
@@ -467,13 +502,13 @@ struct MainGameScreenView: View {
             }
             return
         }
-
+        
         stationRef.getDocument { snapshot, error in
             guard error == nil else {
                 print("❌ Firestore error: \(error!.localizedDescription)")
                 return
             }
-
+            
             if let snapshot = snapshot, snapshot.exists,
                let data = snapshot.data(),
                let title = data["title"] as? String,
@@ -481,39 +516,39 @@ struct MainGameScreenView: View {
                let stationName = data["station"] as? String,
                let lineRaw = data["line"] as? String,
                let globalLine = MetroLine(rawValue: lineRaw) {
-
+                
                 let challenge = GameChallenge(title: title, description: description, station: stationName, line: globalLine)
-
+                
                 let isCompletedGlobally = globallyCompleted.contains {
                     $0.title == challenge.title && $0.station == station.name && $0.line == line
                 }
-
+                
                 guard !isCompletedGlobally else {
                     print("Challenge '\(challenge.title)' already completed at \(station.name) on line \(line.rawValue)")
                     return
                 }
-
+                
                 print("Found existing challenge: \(challenge.title)")
                 self.saveChallengeToUnlocked(challenge)
-
+                
             } else {
                 // Document doesn't exist — fallback to random challenge
                 print("📄 No existing station challenge found for \(station.name) on \(line.rawValue) — selecting random.")
-
+                
                 let options = sampleChallenges.filter { $0.station == station.name && $0.line == line }
-
+                
                 guard let random = options.randomElement() else {
                     print("❌ No challenges available for station: \(station.name) on \(line.rawValue)")
                     return
                 }
-
+                
                 let chosenChallenge = GameChallenge(
                     title: random.title,
                     description: random.description,
                     station: random.station,
                     line: line
                 )
-
+                
                 let data: [String: Any] = [
                     "title": chosenChallenge.title,
                     "description": chosenChallenge.description,
@@ -521,7 +556,7 @@ struct MainGameScreenView: View {
                     "line": chosenChallenge.line?.rawValue ?? "",
                     "timestamp": Timestamp()
                 ]
-
+                
                 stationRef.setData(data) { err in
                     if let err = err {
                         print("Failed to save global challenge: \(err.localizedDescription)")
@@ -533,7 +568,7 @@ struct MainGameScreenView: View {
             }
         }
     }
-
+    
     func saveChallengeToUnlocked(_ challenge: GameChallenge, sacrificed: Bool = false) {
         let data: [String: Any] = [
             "title": challenge.title,
@@ -543,18 +578,18 @@ struct MainGameScreenView: View {
             "timestamp": Timestamp(),
             "sacrificed": sacrificed // ✅
         ]
-
+        
         let teamRef = Firestore.firestore()
             .collection("games").document(gameID)
             .collection("teams").document(teamID)
             .collection("unlockedChallenges")
-
+        
         let rawID = "\(challenge.station)_\(challenge.title)_\(challenge.line?.rawValue ?? "")"
         let docID = rawID
             .replacingOccurrences(of: "[^a-zA-Z0-9_]+", with: "_", options: .regularExpression)
             .replacingOccurrences(of: "_+", with: "_") // Optional cleanup
             .trimmingCharacters(in: CharacterSet(charactersIn: "_"))
-
+        
         teamRef.document(docID).setData(data) { error in
             if let error = error {
                 print("❌ Failed to set unlocked challenge: \(error.localizedDescription)")
@@ -562,18 +597,18 @@ struct MainGameScreenView: View {
                 print("✅ Challenge saved to unlockedChallenges under \(docID)")
             }
         }
-
+        
         print("✅ Challenge '\(challenge.title)' added to unlockedChallenges for team \(teamID)")
     }
-
-
+    
+    
     func completeChallenge(_ challenge: GameChallenge) {
         if sacrificedStations.contains(challenge.station) {
             alertMessage = "You sacrificed this station. You cannot complete its challenge."
             showAlert = true
             return
         }
-
+        
         if let line = challenge.line,
            let lockUntil = sacrificedLineLocks[line],
            lockUntil > Date() {
@@ -584,12 +619,12 @@ struct MainGameScreenView: View {
             }
             return
         }
-
+        
         // ✅ Remove from unlockedChallenges
         unlockedChallenges.removeAll { $0.id == challenge.id }
-
+        
         completedChallenges.append(challenge)
-
+        
         let data: [String: Any] = [
             "title": challenge.title,
             "description": challenge.description,
@@ -597,17 +632,17 @@ struct MainGameScreenView: View {
             "line": challenge.line?.rawValue ?? "",
             "timestamp": Timestamp()
         ]
-
+        
         let gameRef = Firestore.firestore().collection("games").document(gameID)
         gameRef.collection("teams").document(teamID)
             .collection("completedChallenges").addDocument(data: data)
-
+        
         gameRef.collection("completedChallenges").addDocument(data: data)
-
+        
         print("✅ Completed challenge: \(challenge.title)")
         updateLineControlScores()
     }
-
+    
     func listenForUnlockedChallenges() {
         Firestore.firestore().collection("games").document(gameID)
             .collection("teams").document(teamID)
@@ -627,23 +662,23 @@ struct MainGameScreenView: View {
     }
     
     @State private var allTeamCompletions: [String: [GameChallenge]] = [:]
-
-
+    
+    
     func listenToAllCompletedChallenges() {
         let teamsRef = Firestore.firestore()
             .collection("games").document(gameID)
             .collection("teams")
-
+        
         teamsRef.getDocuments { snapshot, _ in
             guard let docs = snapshot?.documents else { return }
-
+            
             for doc in docs {
                 let teamID = doc.documentID
                 teamsRef.document(teamID)
                     .collection("completedChallenges")
                     .addSnapshotListener { snap, _ in
                         guard let docs = snap?.documents else { return }
-
+                        
                         let challenges = docs.map { d in
                             let data = d.data()
                             return GameChallenge(
@@ -653,7 +688,7 @@ struct MainGameScreenView: View {
                                 line: MetroLine(rawValue: data["line"] as? String ?? "")
                             )
                         }
-
+                        
                         DispatchQueue.main.async {
                             allTeamCompletions[teamID] = challenges
                         }
@@ -661,8 +696,8 @@ struct MainGameScreenView: View {
             }
         }
     }
-
-
+    
+    
     
     func listenForCompletedChallenges() {
         Firestore.firestore().collection("games").document(gameID)
@@ -678,11 +713,11 @@ struct MainGameScreenView: View {
                         station: d["station"] as? String ?? "",
                         line: MetroLine(rawValue: d["line"] as? String ?? "")
                     )
-
+                    
                 }
             }
     }
-
+    
     func listenForGlobalCompletions() {
         Firestore.firestore().collection("games").document(gameID)
             .collection("completedChallenges")
@@ -700,18 +735,18 @@ struct MainGameScreenView: View {
                 print("Global completions updated: \(self.globallyCompleted.count)")
             }
     }
-
+    
     func listenForOtherTeams() {
         let db = Firestore.firestore()
         let teamCollection = db.collection("games").document(gameID).collection("teams")
-
+        
         teamCollection.getDocuments { snapshot, _ in
             guard let docs = snapshot?.documents else { return }
             let others = docs.map { $0.documentID }.filter { $0 != teamID }
             self.otherTeamIDs = others
             for id in others { self.attachListenerToTeam(id) }
         }
-
+        
         teamCollection.addSnapshotListener { snapshot, _ in
             guard let docs = snapshot?.documents else { return }
             let others = docs.map { $0.documentID }.filter { $0 != teamID }
@@ -721,11 +756,11 @@ struct MainGameScreenView: View {
         
         fetchTeamNames()
     }
-
+    
     func attachListenerToTeam(_ id: String) {
         guard !attachedListeners.contains(id) else { return }
         attachedListeners.insert(id)
-
+        
         Firestore.firestore().collection("games").document(gameID)
             .collection("teams").document(id)
             .collection("unlockedChallenges")
@@ -757,7 +792,7 @@ struct MainGameScreenView: View {
         let db = Firestore.firestore()
         db.collection("games").document(gameID).collection("teams").getDocuments { snapshot, error in
             guard let docs = snapshot?.documents else { return }
-
+            
             var names: [String: String] = [:]
             for doc in docs {
                 let teamID = doc.documentID
@@ -765,30 +800,30 @@ struct MainGameScreenView: View {
                     names[teamID] = name
                 }
             }
-
+            
             DispatchQueue.main.async {
                 self.teamNames = names
             }
         }
     }
-
+    
     func fetchStartTimeAndBeginTimer() {
         let gameRef = Firestore.firestore().collection("games").document(gameID)
         gameRef.getDocument { snapshot, _ in
             guard let data = snapshot?.data(),
                   let timestamp = data["startTime"] as? Timestamp else { return }
-
+            
             let startTime = timestamp.dateValue()
             let endTime = startTime.addingTimeInterval(gameDuration)
-
+            
             updateRemainingTime(endTime: endTime)
-
+            
             timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
                 updateRemainingTime(endTime: endTime)
             }
         }
     }
-
+    
     func updateRemainingTime(endTime: Date) {
         let remaining = endTime.timeIntervalSinceNow
         DispatchQueue.main.async {
@@ -796,7 +831,7 @@ struct MainGameScreenView: View {
             self.timerEnded = remaining <= 0
         }
     }
-
+    
     func formatTime(_ interval: TimeInterval) -> String {
         let hours = Int(interval) / 3600
         let minutes = (Int(interval) % 3600) / 60
@@ -805,10 +840,10 @@ struct MainGameScreenView: View {
     }
     func controllingTeamForStation(_ station: Station) -> String? {
         guard let line = station.lines.first else { return nil }
-
+        
         let maxCount = teamLineCounts.values.map { $0[line] ?? 0 }.max() ?? 0
         let topTeams = teamLineCounts.filter { $0.value[line] == maxCount }
-
+        
         if topTeams.count == 1 {
             let teamID = topTeams.first!.key
             return teamNames[teamID]
@@ -831,100 +866,172 @@ struct MainGameScreenView: View {
         let globallyCompleted: [GameChallenge]
         let sacrificedStations: Set<String>
         let completedChallenges: [GameChallenge]
-        let sacrificedLineLocks: [MetroLine: Date]
-        let teamID: String
+        let unlockedChallenges: [GameChallenge]
         let allTeamCompletions: [String: [GameChallenge]]
-
+        let otherTeamsUnlocked: [String: [GameChallenge]]
+        let teamID: String
+        let teamColors: [String: Color]
+        
         var body: some View {
-            ZStack {
-                GeometryReader { geometry in
-                    let size = min(geometry.size.width, geometry.size.height)
-                    let center = CGPoint(x: size / 2, y: size / 2)
-                    let radius = size / 2
-
-                    if sacrificedStations.contains(station.name) {
-                        Circle()
-                            .fill(Color.black)
-                            .frame(width: size, height: size)
-                            .overlay(Text("✖").font(.caption).bold().foregroundColor(.white))
+            GeometryReader { geo in
+                let size = min(geo.size.width, geo.size.height)
+                let center = CGPoint(x: size / 2, y: size / 2)
+                let outerRadius = size / 2
+                let innerRadius = outerRadius * 0.75
+                let symbolRadius = innerRadius * 0.65
+                let stationName = station.name
+                
+                ZStack {
+                    // Outer ring segments (line colors)
+                    ForEach(Array(station.lines.enumerated()), id: \.offset) { index, line in
+                        let angleSize = 360.0 / Double(station.lines.count)
+                        let startAngle = Angle(degrees: angleSize * Double(index) - 90)
+                        let endAngle = Angle(degrees: angleSize * Double(index + 1) - 90)
+                        
+                        Path { path in
+                            path.move(to: center)
+                            path.addArc(center: center, radius: outerRadius,
+                                        startAngle: startAngle, endAngle: endAngle,
+                                        clockwise: false)
+                            path.closeSubpath()
+                        }
+                        .fill(line.color)
+                    }
+                    
+                    // Inner circle segments (team states)
+                    ForEach(Array(station.lines.enumerated()), id: \.offset) { index, line in
+                        let angleSize = 360.0 / Double(station.lines.count)
+                        let startAngle = Angle(degrees: angleSize * Double(index) - 90)
+                        let endAngle = Angle(degrees: angleSize * Double(index + 1) - 90)
+                        
+                        let sacrificed = sacrificedStations.contains(stationName)
+                        let myCompleted = completedChallenges.contains { $0.station == stationName && $0.line == line }
+                        let myUnlocked = unlockedChallenges.contains { $0.station == stationName && $0.line == line }
+                        let globally = globallyCompleted.first { $0.station == stationName && $0.line == line }
+                        let completedBy = globally.flatMap { challenge in
+                            allTeamCompletions.first { $0.value.contains(challenge) }?.key
+                        }
+                        let unlockedByOther = otherTeamsUnlocked.contains {
+                            $0.value.contains { $0.station == stationName && $0.line == line }
+                        }
+                        let otherTeam = otherTeamsUnlocked.first {
+                            $0.value.contains { $0.station == stationName && $0.line == line }
+                        }?.key
+                        
+                        let fillColor: Color = {
+                            if sacrificed {
+                                return .gray
+                            } else if myCompleted {
+                                return teamColors[teamID] ?? .blue
+                            } else if let team = completedBy {
+                                return teamColors[team] ?? .black
+                            } else if myUnlocked {
+                                return teamColors[teamID] ?? .blue
+                            } else if let team = otherTeam {
+                                return teamColors[team] ?? .green
+                            } else {
+                                return .white
+                            }
+                        }()
+                        
+                        Path { path in
+                            path.move(to: center)
+                            path.addArc(center: center, radius: innerRadius,
+                                        startAngle: startAngle, endAngle: endAngle,
+                                        clockwise: false)
+                            path.closeSubpath()
+                        }
+                        .fill(fillColor)
+                    }
+                    
+                    // Segmented or centered symbols
+                    if station.lines.count == 1 {
+                        let line = station.lines[0]
+                        let myCompleted = completedChallenges.contains { $0.station == stationName && $0.line == line }
+                        let globally = globallyCompleted.first { $0.station == stationName && $0.line == line }
+                        let completedBy = globally.flatMap { challenge in
+                            allTeamCompletions.first { $0.value.contains(challenge) }?.key
+                        }
+                        let sacrificed = sacrificedStations.contains(stationName)
+                        
+                        let symbol: String? = {
+                            if sacrificed {
+                                return "✖"
+                            } else if myCompleted {
+                                return "✔"
+                            } else if let team = completedBy {
+                                return team == teamID ? "✔" : "✖"
+                            } else {
+                                return nil
+                            }
+                        }()
+                        
+                        if let symbol = symbol {
+                            Text(symbol)
+                                .font(.caption2).bold()
+                                .foregroundColor(.white)
+                                .position(center)
+                        }
                     } else {
                         ForEach(Array(station.lines.enumerated()), id: \.offset) { index, line in
-                            let isCompletedBySelf = completedChallenges.contains {
-                                $0.station == station.name && $0.line == line
+                            let angleSize = 360.0 / Double(station.lines.count)
+                            let midAngle = Angle(degrees: angleSize * (Double(index) + 0.5) - 90)
+                            let symbolX = center.x + symbolRadius * CGFloat(cos(midAngle.radians))
+                            let symbolY = center.y + symbolRadius * CGFloat(sin(midAngle.radians))
+                            let symbolPos = CGPoint(x: symbolX, y: symbolY)
+                            
+                            let myCompleted = completedChallenges.contains { $0.station == stationName && $0.line == line }
+                            let globally = globallyCompleted.first { $0.station == stationName && $0.line == line }
+                            let completedBy = globally.flatMap { challenge in
+                                allTeamCompletions.first { $0.value.contains(challenge) }?.key
                             }
-                            let isCompletedGlobally = globallyCompleted.contains {
-                                $0.station == station.name && $0.line == line
-                            }
-                            let isCompletedByOtherTeam = isCompletedGlobally && !isCompletedBySelf
-                            let isLockedLine = (sacrificedLineLocks[line] ?? Date()) > Date()
-
-                            let totalLines = station.lines.count
-                            let startAngle = Angle(degrees: (360.0 / Double(totalLines)) * Double(index) - 90)
-                            let endAngle = Angle(degrees: (360.0 / Double(totalLines)) * Double(index + 1) - 90)
-
-
-                            // Arc
-                            let arcPath = Path { path in
-                                path.move(to: center)
-                                path.addArc(center: center,
-                                            radius: radius,
-                                            startAngle: startAngle,
-                                            endAngle: endAngle,
-                                            clockwise: false)
-                            }
-
-                            arcPath.fill(line.color)
-
-                            // Symbol to mask
-                            let symbol = Group {
-                                if isCompletedBySelf {
-                                    Text("✔").font(.caption2).bold().foregroundColor(.white)
-                                } else if isCompletedByOtherTeam {
-                                    Text("✖").font(.caption2).bold().foregroundColor(.white)
-                                } else if isLockedLine {
-                                    Text("🔒").font(.caption2)
+                            let sacrificed = sacrificedStations.contains(stationName)
+                            
+                            let symbol: String? = {
+                                if sacrificed {
+                                    return "✖"
+                                } else if myCompleted {
+                                    return "✔"
+                                } else if let team = completedBy {
+                                    return team == teamID ? "✔" : "✖"
+                                } else {
+                                    return nil
                                 }
-                            }
-
-                            // Only show if one of the states applies
-                            if isCompletedBySelf || isCompletedByOtherTeam || isLockedLine {
-                                symbol
-                                    .frame(width: size, height: size)
-                                    .position(center)
-                                    .mask(
-                                        arcPath
-                                            .fill(Color.white)
-                                    )
+                            }()
+                            
+                            if let symbol = symbol {
+                                Text(symbol)
+                                    .font(.caption2).bold()
+                                    .foregroundColor(.white)
+                                    .position(symbolPos)
                             }
                         }
-
-                        Circle()
-                            .stroke(Color.black, lineWidth: 1)
                     }
                 }
             }
             .frame(width: 22, height: 22)
         }
     }
-
+    
+    
     func startLineControlListener() {
         let db = Firestore.firestore()
         let teamsRef = db.collection("games").document(gameID).collection("teams")
-
+        
         teamsRef.getDocuments { snapshot, _ in
             guard let docs = snapshot?.documents else { return }
-
+            
             for doc in docs {
                 let teamID = doc.documentID
                 teamsRef.document(teamID)
                     .collection("completedChallenges")
                     .addSnapshotListener { snap, _ in
                         guard let challengeDocs = snap?.documents else { return }
-
+                        
                         var updatedCounts = self.teamLineCounts
-
+                        
                         var lineStationMap: [MetroLine: Set<String>] = [:]
-
+                        
                         for doc in challengeDocs {
                             let station = doc.data()["station"] as? String ?? ""
                             let lineRaw = doc.data()["line"] as? String ?? ""
@@ -932,11 +1039,11 @@ struct MainGameScreenView: View {
                                 lineStationMap[line, default: []].insert(station)
                             }
                         }
-
+                        
                         for (line, stations) in lineStationMap {
                             updatedCounts[teamID, default: [:]][line] = stations.count
                         }
-
+                        
                         DispatchQueue.main.async {
                             self.teamLineCounts = updatedCounts
                             self.fetchTeamNames() // Optional, if team names can change
@@ -948,63 +1055,63 @@ struct MainGameScreenView: View {
     
     private var controlledLineCounts: [String: Int] {
         var result: [String: Int] = [:]
-
+        
         for teamID in teamLineCounts.keys {
             var controlledLines = 0
-
+            
             for line in MetroLine.allCases {
                 // Get count of stations for each team for this line
                 let scores = teamLineCounts.mapValues { $0[line] ?? 0 }
-
+                
                 let maxCount = scores.values.max() ?? 0
                 let topTeams = scores.filter { $0.value == maxCount && maxCount > 0 }.keys
-
+                
                 if topTeams.count == 1 && topTeams.contains(teamID) {
                     controlledLines += 1
                 }
             }
-
+            
             result[teamID] = controlledLines
         }
-
+        
         return result
     }
-
+    
     func sacrificeChallenge(_ challenge: GameChallenge) {
         sacrificedStations.insert(challenge.station)
-
+        
         if let line = challenge.line {
             sacrificedLineLocks[line] = Date().addingTimeInterval(20*60) // 20 min
         }
-
+        
         // ✅ Remove from unlockedChallenges
         unlockedChallenges.removeAll { $0.id == challenge.id }
-
+        
         if !sacrificedChallenges.contains(where: { $0.id == challenge.id }) {
             sacrificedChallenges.append(challenge)
         }
-
+        
         let teamRef = Firestore.firestore()
             .collection("games").document(gameID)
             .collection("teams").document(teamID)
             .collection("unlockedChallenges")
-
+        
         let safeStation = challenge.station.replacingOccurrences(of: "[^a-zA-Z0-9_]+", with: "_", options: .regularExpression)
         let safeTitle = challenge.title.replacingOccurrences(of: "[^a-zA-Z0-9_]+", with: "_", options: .regularExpression)
         let docID = "\(safeStation)_\(safeTitle)_\(challenge.line?.rawValue ?? "")"
-
+        
         teamRef.document(docID).delete()
-
+        
         print("Sacrificed '\(challenge.title)' at \(challenge.station). Line locked for 20 minutes.")
         
         let db = Firestore.firestore()
         let sacrificeRef = db.collection("games").document(gameID)
             .collection("teams").document(teamID)
             .collection("sacrifices")
-
+        
         let stationDocID = challenge.station.replacingOccurrences(of: "[^a-zA-Z0-9_]+", with: "_", options: .regularExpression)
         let lineRaw = challenge.line?.rawValue ?? ""
-
+        
         let sacrificeData: [String: Any] = [
             "station": challenge.station,
             "line": lineRaw,
@@ -1012,7 +1119,7 @@ struct MainGameScreenView: View {
             "title": challenge.title,
             "description": challenge.description
         ]
-
+        
         sacrificeRef.document(stationDocID).setData(sacrificeData)
     }
     
@@ -1023,11 +1130,11 @@ struct MainGameScreenView: View {
             .collection("sacrifices")
             .addSnapshotListener { snapshot, _ in
                 guard let docs = snapshot?.documents else { return }
-
+                
                 var stations: Set<String> = []
                 var locks: [MetroLine: Date] = [:]
                 var sacrificed: [GameChallenge] = []
-
+                
                 for doc in docs {
                     let data = doc.data()
                     let station = data["station"] as? String ?? ""
@@ -1035,7 +1142,7 @@ struct MainGameScreenView: View {
                     let timestamp = (data["timestamp"] as? Timestamp)?.dateValue() ?? Date()
                     let title = data["title"] as? String ?? ""
                     let description = data["description"] as? String ?? ""
-
+                    
                     if let line = MetroLine(rawValue: lineRaw) {
                         stations.insert(station)
                         locks[line] = timestamp.addingTimeInterval(20*60)
@@ -1049,7 +1156,7 @@ struct MainGameScreenView: View {
                         ))
                     }
                 }
-
+                
                 DispatchQueue.main.async {
                     self.sacrificedStations = stations
                     self.sacrificedLineLocks = locks
@@ -1057,6 +1164,41 @@ struct MainGameScreenView: View {
                 }
             }
     }
+    func fetchTeamColors() {
+        let db = Firestore.firestore()
+        db.collection("games").document(gameID).collection("teams").getDocuments { snapshot, _ in
+            guard let docs = snapshot?.documents else { return }
+            
+            var colorMap: [String: Color] = [:]
+            for doc in docs {
+                let teamID = doc.documentID
+                if let colorNameRaw = doc.data()["teamColor"] as? String {
+                    let colorName = colorNameRaw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                    colorMap[teamID] = mapColorNameToSwiftUIColor(colorName)
+                }
+            }
+            
+            DispatchQueue.main.async {
+                self.teamColors = colorMap
+            }
+        }
+    }
+    
+    func mapColorNameToSwiftUIColor(_ name: String) -> Color {
+        switch name {
+            case "blue": return .blue
+            case "green": return .green
+            case "red": return .red
+            case "purple": return .purple
+            case "orange": return .orange
+            case "pink": return .pink
+            case "yellow": return .yellow
+            default: return .gray
+        }
+    }
 }
 
 
+//#Preview {
+//    MainGameScreenView(gameID: "preview", teamID: "previewTeam")
+//}

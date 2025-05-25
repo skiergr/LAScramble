@@ -48,7 +48,11 @@ struct EndGameView: View {
             }
 
             Button("Return to Home") {
-                presentationMode.wrappedValue.dismiss()
+                if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                   let window = windowScene.windows.first {
+                    window.rootViewController = UIHostingController(rootView: GameMenuView())
+                    window.makeKeyAndVisible()
+                }
             }
             .padding()
             .background(Color.blue)
