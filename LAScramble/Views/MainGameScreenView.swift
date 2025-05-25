@@ -44,9 +44,46 @@ struct MainGameScreenView: View {
             }
         }
         .onAppear(perform: setupListeners)
-        .fullScreenCover(item: $selectedStation, content: stationPopup)
+        .fullScreenCover(item: $selectedStation) { station in
+            StationPopupFullScreenView(
+                station: station,
+                onUnlock: { selectedLine in
+                    unlockChallenge(for: station, on: selectedLine)
+                    selectedStation = nil
+                },
+                onClose: {
+                    selectedStation = nil
+                    selectedLine = nil
+                },
+                isSacrificed: sacrificedStations.contains(station.name),
+                controllingTeamName: controllingTeamForStation(station),
+                teamNames: teamNames,
+                myTeamID: teamID,
+                selectedLine: selectedLine ?? station.lines.first!,
+                allUnlocked: unlockedChallenges,
+                allCompleted: completedChallenges,
+                globalCompleted: globallyCompleted,
+                allOtherUnlocked: otherTeamsUnlocked,
+                teamCompletions: allTeamCompletions,
+                selectedChallenge: $selectedChallenge,
+                selectedStation: $selectedStation
+            )
+        }
         .fullScreenCover(item: $selectedChallenge) { challenge in
-            challengePopup(challenge: challenge)
+            ChallengePopupView(
+                challenge: challenge,
+                onComplete: {
+                    completeChallenge(challenge)
+                    selectedChallenge = nil
+                },
+                onSacrifice: {
+                    sacrificeChallenge(challenge)
+                    selectedChallenge = nil
+                },
+                onClose: { selectedChallenge = nil },
+                selectedStation: $selectedStation,
+                selectedChallenge: $selectedChallenge
+            )
         }
         .sheet(isPresented: $showScoreDetails) {
             ScoreDetailsView(teamLineCounts: teamLineCounts, teamNames: teamNames)
@@ -97,28 +134,34 @@ struct MainGameScreenView: View {
             controllingTeamName: controllingTeamForStation(station),
             teamNames: teamNames,
             myTeamID: teamID,
-            selectedLine: line,
+            selectedLine: selectedLine ?? station.lines.first!,
             allUnlocked: unlockedChallenges,
             allCompleted: completedChallenges,
             globalCompleted: globallyCompleted,
             allOtherUnlocked: otherTeamsUnlocked,
-            teamCompletions: allTeamCompletions
+            teamCompletions: allTeamCompletions,
+            selectedChallenge: $selectedChallenge,
+            selectedStation: $selectedStation
         )
     }
     
     private func challengePopup(challenge: GameChallenge) -> some View {
         ChallengePopupView(
-            challenge: challenge,
-            onComplete: {
-                completeChallenge(challenge)
-                selectedChallenge = nil
-            },
-            onSacrifice: {
-                sacrificeChallenge(challenge)
-                selectedChallenge = nil
-            },
-            onClose: { selectedChallenge = nil }
-        )
+                challenge: challenge,
+                onComplete: {
+                    completeChallenge(challenge)
+                    selectedChallenge = nil
+                },
+                onSacrifice: {
+                    sacrificeChallenge(challenge)
+                    selectedChallenge = nil
+                },
+                onClose: {
+                    selectedChallenge = nil
+                },
+                selectedStation: $selectedStation,
+                selectedChallenge: $selectedChallenge
+            )
     }
     
     private func setupListeners() {
@@ -259,41 +302,42 @@ struct MainGameScreenView: View {
             GeometryReader { geometry in
                 let containerSize = geometry.size
                 
-                content
-                    .scaleEffect(scale)
-                    .offset(offset)
-                    .gesture(
-                        SimultaneousGesture(
-                            MagnificationGesture()
-                                .onChanged { value in
-                                    let newScale = lastScale * value
-                                    scale = min(max(newScale, minScale), maxScale)
-                                }
-                                .onEnded { _ in
-                                    scale = min(max(scale, minScale), maxScale)
-                                    lastScale = scale
-                                    offset = clampedOffset(in: containerSize)
-                                    lastOffset = offset
-                                },
-                            DragGesture()
-                                .onChanged { value in
-                                    guard scale > 1.0 else { return }
-                                    let proposedOffset = CGSize(
-                                        width: lastOffset.width + value.translation.width,
-                                        height: lastOffset.height + value.translation.height
-                                    )
-                                    offset = clampedOffset(proposedOffset, in: containerSize)
-                                }
-                                .onEnded { _ in
-                                    lastOffset = offset
-                                }
-                        )
+                ZStack {
+                    content
+                        .scaleEffect(scale)
+                        .offset(offset)
+                }
+                .gesture(
+                    SimultaneousGesture(
+                        MagnificationGesture()
+                            .onChanged { value in
+                                let newScale = lastScale * value
+                                scale = min(max(newScale, minScale), maxScale)
+                            }
+                            .onEnded { _ in
+                                scale = min(max(scale, minScale), maxScale)
+                                lastScale = scale
+                                offset = clampedOffset(in: containerSize)
+                                lastOffset = offset
+                            },
+                        DragGesture()
+                            .onChanged { value in
+                                guard scale > 1.0 else { return }
+                                let proposed = CGSize(
+                                    width: lastOffset.width + value.translation.width,
+                                    height: lastOffset.height + value.translation.height
+                                )
+                                offset = clampedOffset(proposed, in: containerSize)
+                            }
+                            .onEnded { _ in
+                                lastOffset = offset
+                            }
                     )
-                    .animation(.easeInOut(duration: 0.2), value: scale)
+                )
+                .animation(.easeInOut(duration: 0.2), value: scale)
             }
         }
         
-        // MARK: - Clamping Helper
         private func clampedOffset(_ proposed: CGSize? = nil, in containerSize: CGSize) -> CGSize {
             let proposedOffset = proposed ?? offset
             

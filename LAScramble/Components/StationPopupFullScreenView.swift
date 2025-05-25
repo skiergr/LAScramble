@@ -14,6 +14,9 @@ struct StationPopupFullScreenView: View {
     let globalCompleted: [GameChallenge]
     let allOtherUnlocked: [String: [GameChallenge]]
     let teamCompletions: [String: [GameChallenge]]
+    
+    @Binding var selectedChallenge: GameChallenge?
+    @Binding var selectedStation: Station?
 
     @State private var isUnlocking = false
     @State private var currentLine: MetroLine
@@ -31,7 +34,9 @@ struct StationPopupFullScreenView: View {
         allCompleted: [GameChallenge],
         globalCompleted: [GameChallenge],
         allOtherUnlocked: [String: [GameChallenge]],
-        teamCompletions: [String: [GameChallenge]]
+        teamCompletions: [String: [GameChallenge]],
+        selectedChallenge: Binding<GameChallenge?>,
+        selectedStation: Binding<Station?>
     ) {
         self.station = station
         self.onUnlock = onUnlock
@@ -47,6 +52,8 @@ struct StationPopupFullScreenView: View {
         self.globalCompleted = globalCompleted
         self.allOtherUnlocked = allOtherUnlocked
         self.teamCompletions = teamCompletions
+        self._selectedChallenge = selectedChallenge
+        self._selectedStation = selectedStation
     }
 
     var body: some View {
@@ -85,10 +92,17 @@ struct StationPopupFullScreenView: View {
             if let challenge = currentChallenge {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Challenge").bold()
-                    Text(challenge.title)
-                    Text(challenge.description)
-                        .font(.subheadline)
-                        .foregroundColor(.gray)
+                    Button(action: {
+                        selectedChallenge = challenge
+                        selectedStation = nil
+                    }) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(challenge.title)
+                            Text(challenge.description)
+                                .font(.subheadline)
+                                .foregroundColor(.gray)
+                        }
+                    }
 
                     if let completedTeam = completedByTeamID {
                         Text("Completed by: \(teamNames[completedTeam] ?? completedTeam)")
@@ -133,8 +147,6 @@ struct StationPopupFullScreenView: View {
         }
         .padding()
     }
-
-    // MARK: - Derived Logic
 
     private var isUnlocked: Bool {
         allUnlocked.contains { $0.station == station.name && $0.line == currentLine }

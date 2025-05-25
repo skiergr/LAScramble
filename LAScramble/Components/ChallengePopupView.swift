@@ -5,6 +5,8 @@ struct ChallengePopupView: View {
     var onComplete: () -> Void
     var onSacrifice: () -> Void
     var onClose: () -> Void
+    @Binding var selectedStation: Station?
+    @Binding var selectedChallenge: GameChallenge?
 
     var body: some View {
         NavigationView {
@@ -13,9 +15,16 @@ struct ChallengePopupView: View {
                     .font(.title2)
                     .bold()
 
-                Text(challenge.station)
-                    .font(.caption)
-                    .foregroundColor(.gray)
+                Button(action: {
+                    if let station = sampleStations.first(where: { $0.name == challenge.station }) {
+                        selectedStation = station
+                        selectedChallenge = nil
+                    }
+                }) {
+                    Text("📍 \(challenge.station)")
+                        .font(.caption)
+                        .foregroundColor(.blue)
+                }
 
                 Text(challenge.description)
                     .font(.body)
