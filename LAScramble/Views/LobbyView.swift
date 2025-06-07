@@ -2,70 +2,65 @@ import SwiftUI
 import FirebaseFirestore
 import FirebaseAuth
 
-struct LobbyView: View {
-    var gameID: String
-    var teamID: String
+enum LobbyStage {
+    case none, createTeam, inGame
+}
 
-    @State private var teams: [String: [String]] = [:]           // [teamID: [usernames]]
-    @State private var teamNames: [String: String] = [:]         // [teamID: teamName]
-    @State private var selectedColors: [String: String] = [:]    // [teamID: color name string]
-    @State private var teamColors: [String: Color] = [:]         // [teamID: actual Color]
+struct LobbyView: View {
+    let gameID: String
+
+    @State private var teams: [String: [String]] = [:]
+    @State private var teamNames: [String: String] = [:]
+    @State private var selectedColors: [String: String] = [:]
+    @State private var teamColors: [String: Color] = [:]
+
+    @State private var myTeamID: String?
+    @State private var username: String = ""
+    @State private var newTeamName = ""
+    @State private var chosenColor = "blue"
 
     @State private var isCreator = false
-    @State private var hasStarted = false
-    
-    @State private var showColorAlert = false
+    @State private var stage: LobbyStage = .none
     @State private var alertMessage = ""
+    @State private var showColorAlert = false
+    
+    @State private var allPlayersAssigned = false
 
     let availableColors = ["blue", "green", "red", "purple", "orange", "pink", "yellow"]
 
     var body: some View {
         VStack {
             Text("Lobby").font(.largeTitle).padding(.top)
-
             Text("Game ID: \(gameID)")
                 .font(.subheadline)
                 .foregroundColor(.gray)
-                .padding(.bottom, 8)
+                .padding(.bottom)
 
             ScrollView {
-                ForEach(teams.keys.sorted(), id: \.self) { id in
+                ForEach(teams.keys.sorted(), id: \.self) { teamID in
                     VStack(alignment: .leading) {
                         HStack {
                             Circle()
-                                .fill(teamColors[id] ?? .gray)
+                                .fill(teamColors[teamID] ?? .gray)
                                 .frame(width: 12, height: 12)
 
-                            Text(teamNames[id] ?? "Team")
+                            Text(teamNames[teamID] ?? "Unnamed Team")
                                 .font(.headline)
 
-                            if id == teamID {
-                                Picker("Color", selection: Binding(
-                                    get: { selectedColors[teamID] ?? "blue" },
-                                    set: { newColor in
-                                        let isTaken = selectedColors.contains(where: { $0.key != teamID && $0.value == newColor })
-                                        if isTaken {
-                                            alertMessage = "That color is already taken by another team."
-                                            showColorAlert = true
-                                        } else {
-                                            selectedColors[teamID] = newColor
-                                            saveTeamColor(teamID: teamID, color: newColor)
-                                        }
-                                    })) {
-                                        ForEach(availableColors, id: \.self) { color in
-                                            let isTaken = selectedColors.contains(where: { $0.key != teamID && $0.value == color })
-                                            Text(color.capitalized)
-                                                .tag(color)
-                                                .foregroundColor(isTaken ? .gray : .primary)
-                                                .opacity(isTaken ? 0.4 : 1.0)
-                                        }
+                            Spacer()
+
+                            if myTeamID == nil {
+                                Button("Join") {
+                                    joinTeam(teamID: teamID)
                                 }
-                                .pickerStyle(MenuPickerStyle())
+                                .buttonStyle(.bordered)
+                            } else if myTeamID == teamID {
+                                Text("Joined").font(.caption).foregroundColor(.green)
                             }
                         }
 
-                        ForEach(teams[id] ?? [], id: \.self) { username in
-                            Text(username)
+                        ForEach(teams[teamID] ?? [], id: \.self) { player in
+                            Text(player).font(.subheadline)
                         }
                     }
                     .padding()
@@ -73,6 +68,13 @@ struct LobbyView: View {
                     .cornerRadius(10)
                     .padding(.horizontal)
                 }
+            }
+
+            if myTeamID == nil {
+                Button("Create New Team") {
+                    stage = .createTeam
+                }
+                .padding()
             }
 
             if isCreator {
@@ -83,110 +85,150 @@ struct LobbyView: View {
                 .background(Color.green)
                 .foregroundColor(.white)
                 .cornerRadius(8)
-                .padding(.bottom)
             }
         }
         .onAppear {
-            fetchTeamsAndPlayersLive()
-            fetchTeamColors()
+            fetchLiveLobbyData()
+            fetchUsername()
             checkIfCreator()
             listenForStart()
         }
-        .fullScreenCover(isPresented: $hasStarted) {
-            MainGameScreenView(gameID: gameID, teamID: teamID)
-        }
         .alert(isPresented: $showColorAlert) {
-            Alert(title: Text("Color Unavailable"),
+            Alert(title: Text("Color Taken"),
                   message: Text(alertMessage),
                   dismissButton: .default(Text("OK")))
         }
+        .fullScreenCover(isPresented: Binding(
+            get: { stage != .none },
+            set: { newVal in if !newVal { stage = .none } }
+        )) {
+            switch stage {
+            case .createTeam:
+                createTeamSheet
+            case .inGame:
+                if let teamID = myTeamID {
+                    MainGameScreenView(gameID: gameID, teamID: teamID)
+                }
+            case .none:
+                EmptyView()
+            }
+        }
     }
 
-    // MARK: - Firestore Listeners
+    private var createTeamSheet: some View {
+        NavigationView {
+            VStack(spacing: 20) {
+                Text("Create New Team").font(.headline)
 
-    func fetchTeamsAndPlayersLive() {
+                TextField("Team Name", text: $newTeamName)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .padding()
+
+                Picker("Color", selection: $chosenColor) {
+                    ForEach(availableColors, id: \.self) { color in
+                        let taken = selectedColors.contains { $0.value == color }
+                        Text(color.capitalized)
+                            .foregroundColor(taken ? .gray : .primary)
+                            .opacity(taken ? 0.5 : 1)
+                            .tag(color)
+                    }
+                }
+                .pickerStyle(MenuPickerStyle())
+                .padding()
+
+                Button("Create") {
+                    createTeam()
+                }
+                .disabled(newTeamName.isEmpty)
+                .padding()
+                .background(Color.blue)
+                .foregroundColor(.white)
+                .cornerRadius(8)
+
+                Spacer()
+            }
+            .padding()
+            .navigationTitle("New Team")
+        }
+    }
+
+    func fetchUsername() {
+        guard let uid = Auth.auth().currentUser?.uid else { return }
+
+        Firestore.firestore()
+            .collection("games").document(gameID)
+            .collection("players").document(uid)
+            .getDocument { snapshot, _ in
+                if let data = snapshot?.data(),
+                   let name = data["username"] as? String {
+                    self.username = name
+                }
+            }
+    }
+
+    func fetchLiveLobbyData() {
         let db = Firestore.firestore()
         let teamsRef = db.collection("games").document(gameID).collection("teams")
 
         teamsRef.addSnapshotListener { snapshot, _ in
             guard let docs = snapshot?.documents else { return }
 
-            var takenColors = Set<String>()
-
-            for doc in docs {
-                //let id = doc.documentID
-                var colorName = doc.data()["teamColor"] as? String
-
-                if let existingColor = colorName {
-                    takenColors.insert(existingColor.lowercased())
-                }
-            }
+            var newTeams: [String: [String]] = [:]
+            var newTeamNames: [String: String] = [:]
+            var newSelectedColors: [String: String] = [:]
+            var newTeamColors: [String: Color] = [:]
 
             for doc in docs {
                 let id = doc.documentID
-                let teamName = doc.data()["teamName"] as? String ?? "Unnamed Team"
-                var colorName = doc.data()["teamColor"] as? String
+                let data = doc.data()
+                let name = data["teamName"] as? String ?? "Unnamed"
+                let color = data["teamColor"] as? String ?? "gray"
 
-                // If no color assigned, assign first unused one
-                if colorName == nil || !availableColors.contains(colorName!.lowercased()) {
-                    if let available = availableColors.first(where: { !takenColors.contains($0) }) {
-                        colorName = available
-                        takenColors.insert(available)
-                        saveTeamColor(teamID: id, color: available)
-                    } else {
-                        colorName = "gray" // fallback if no color available
+                newTeamNames[id] = name
+                newSelectedColors[id] = color
+                newTeamColors[id] = mapColorNameToSwiftUIColor(color)
+
+                teamsRef.document(id).collection("players").addSnapshotListener { snap, _ in
+                    let users = snap?.documents.map {
+                        $0.data()["username"] as? String ?? "Unknown"
+                    } ?? []
+
+                    DispatchQueue.main.async {
+                        newTeams[id] = users
+                        self.teams = newTeams
                     }
                 }
-
-                DispatchQueue.main.async {
-                    self.teamNames[id] = teamName
-                    self.selectedColors[id] = colorName
-                    self.teamColors[id] = mapColorNameToSwiftUIColor(colorName ?? "gray")
-                }
-
-                db.collection("games").document(gameID)
-                    .collection("teams").document(id)
-                    .collection("players")
-                    .addSnapshotListener { snap, _ in
-                        let usernames = snap?.documents.map {
-                            $0.data()["username"] as? String ?? "Unknown"
-                        } ?? []
-
-                        DispatchQueue.main.async {
-                            self.teams[id] = usernames
-                        }
-                    }
-            }
-        }
-    }
-
-
-    func fetchTeamColors() {
-        let db = Firestore.firestore()
-        db.collection("games").document(gameID).collection("teams").getDocuments { snapshot, _ in
-            guard let docs = snapshot?.documents else { return }
-
-            var colorMap: [String: Color] = [:]
-            var nameMap: [String: String] = [:]
-            for doc in docs {
-                let id = doc.documentID
-                let rawColor = (doc.data()["teamColor"] as? String ?? "gray").lowercased()
-                colorMap[id] = mapColorNameToSwiftUIColor(rawColor)
-                nameMap[id] = rawColor
             }
 
             DispatchQueue.main.async {
-                self.teamColors = colorMap
-                self.selectedColors = nameMap
+                self.teamNames = newTeamNames
+                self.selectedColors = newSelectedColors
+                self.teamColors = newTeamColors
             }
         }
+        // Fetch all players and compare
+        Firestore.firestore()
+            .collection("games").document(gameID)
+            .collection("players").getDocuments { snapshot, _ in
+                guard let allPlayerDocs = snapshot?.documents else { return }
+
+                let allUIDs = Set(allPlayerDocs.map { $0.documentID })
+                let assignedUIDs = Set(teams.values.flatMap { $0 })  // usernames
+
+                // Cross-reference usernames to UIDs (optional if username == UID)
+                let allUsernames = Set(allPlayerDocs.compactMap { $0.data()["username"] as? String })
+
+                DispatchQueue.main.async {
+                    self.allPlayersAssigned = allUsernames.isSubset(of: assignedUIDs)
+                }
+            }
     }
 
     func checkIfCreator() {
         guard let uid = Auth.auth().currentUser?.uid else { return }
         Firestore.firestore().collection("games").document(gameID).getDocument { snapshot, _ in
-            let creatorID = snapshot?.data()?["createdBy"] as? String ?? ""
-            self.isCreator = (creatorID == uid)
+            let creator = snapshot?.data()?["createdBy"] as? String ?? ""
+            self.isCreator = (creator == uid)
         }
     }
 
@@ -195,40 +237,120 @@ struct LobbyView: View {
             .addSnapshotListener { snapshot, _ in
                 let started = snapshot?.data()?["hasStarted"] as? Bool ?? false
                 if started {
-                    self.hasStarted = true
+                    self.stage = .inGame
                 }
             }
     }
 
-    // MARK: - Actions
+    func createTeam() {
+        guard let uid = Auth.auth().currentUser?.uid else { return }
 
-    func startGame() {
-        Firestore.firestore().collection("games").document(gameID).updateData([
-            "hasStarted": true,
-            "startTime": Timestamp()
-        ])
-    }
+        let teamsRef = Firestore.firestore()
+            .collection("games").document(gameID)
+            .collection("teams")
 
-    func saveTeamColor(teamID: String, color: String) {
-        let db = Firestore.firestore()
-        let teamsRef = db.collection("games").document(gameID).collection("teams")
-
-        // Check if color is taken
-        teamsRef.getDocuments { snapshot, error in
-            guard let docs = snapshot?.documents, error == nil else { return }
-
-            let taken = docs.contains { doc in
-                let docTeamID = doc.documentID
-                let currentColor = doc.data()["teamColor"] as? String ?? ""
-                return docTeamID != teamID && currentColor.lowercased() == color.lowercased()
-            }
-
-            if taken {
-                print("⚠️ Color '\(color)' already taken.")
+        // 1. First check if the chosen color is taken
+        teamsRef.whereField("teamColor", isEqualTo: chosenColor).getDocuments { snapshot, error in
+            if let error = error {
+                self.alertMessage = "Error checking colors: \(error.localizedDescription)"
+                self.showColorAlert = true
                 return
             }
 
-            teamsRef.document(teamID).updateData(["teamColor": color.lowercased()])
+            if let docs = snapshot?.documents, !docs.isEmpty {
+                self.alertMessage = "That color is already taken. Please choose another."
+                self.showColorAlert = true
+                return
+            }
+
+            // 2. Proceed to create the team
+            let teamID = "team-\(UUID().uuidString.prefix(6))"
+            let teamRef = teamsRef.document(teamID)
+
+            let teamData: [String: Any] = [
+                "teamName": newTeamName,
+                "teamColor": chosenColor
+            ]
+
+            let playerData: [String: Any] = [
+                "uid": uid,
+                "username": username
+            ]
+
+            teamRef.setData(teamData)
+            teamRef.collection("players").document(uid).setData(playerData)
+
+            DispatchQueue.main.async {
+                myTeamID = teamID
+                stage = .none
+            }
+        }
+    }
+
+    func joinTeam(teamID: String) {
+        guard let uid = Auth.auth().currentUser?.uid else { return }
+
+        let playerData: [String: Any] = [
+            "uid": uid,
+            "username": username
+        ]
+
+        Firestore.firestore()
+            .collection("games").document(gameID)
+            .collection("teams").document(teamID)
+            .collection("players").document(uid)
+            .setData(playerData)
+
+        myTeamID = teamID
+    }
+
+    func startGame() {
+        let db = Firestore.firestore()
+        let gameRef = db.collection("games").document(gameID)
+        let teamsRef = gameRef.collection("teams")
+        let playersRef = gameRef.collection("players")
+
+        playersRef.getDocuments { playerSnapshot, error in
+            guard let playerDocs = playerSnapshot?.documents else {
+                self.alertMessage = "Failed to fetch players"
+                self.showColorAlert = true
+                return
+            }
+
+            let allPlayerIDs = Set(playerDocs.map { $0.documentID })
+
+            teamsRef.getDocuments { teamSnapshot, _ in
+                guard let teamDocs = teamSnapshot?.documents else { return }
+
+                var teamPlayerIDs = Set<String>()
+                let dispatchGroup = DispatchGroup()
+
+                for teamDoc in teamDocs {
+                    dispatchGroup.enter()
+                    teamsRef.document(teamDoc.documentID).collection("players").getDocuments { snap, _ in
+                        if let docs = snap?.documents {
+                            for doc in docs {
+                                teamPlayerIDs.insert(doc.documentID)
+                            }
+                        }
+                        dispatchGroup.leave()
+                    }
+                }
+
+                dispatchGroup.notify(queue: .main) {
+                    let unassignedPlayers = allPlayerIDs.subtracting(teamPlayerIDs)
+
+                    if !unassignedPlayers.isEmpty {
+                        self.alertMessage = "All players must be on a team to start the game."
+                        self.showColorAlert = true
+                    } else {
+                        gameRef.updateData([
+                            "hasStarted": true,
+                            "startTime": Timestamp()
+                        ])
+                    }
+                }
+            }
         }
     }
 

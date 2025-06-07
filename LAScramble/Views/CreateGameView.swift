@@ -2,11 +2,15 @@ import SwiftUI
 import FirebaseAuth
 import FirebaseFirestore
 
+enum CreateGameStage {
+    case none, username, lobby
+}
+
 struct CreateGameView: View {
-    @State private var gameCreated = false
-    @State private var errorMessage: String?
+    @State private var gameStage: CreateGameStage = .none
     @State private var gameID: String = ""
-    @State private var teamID: String = ""
+    @State private var username: String = ""
+    @State private var errorMessage: String?
 
     var body: some View {
         VStack(spacing: 20) {
@@ -24,15 +28,25 @@ struct CreateGameView: View {
             .padding(.horizontal)
 
             if let error = errorMessage {
-                Text("\(error)")
-                    .foregroundColor(.red)
+                Text(error).foregroundColor(.red)
             }
         }
         .padding()
-        .fullScreenCover(isPresented: Binding(get: {
-            gameCreated && !gameID.isEmpty && !teamID.isEmpty
-        }, set: { _ in })) {
-            LobbyView(gameID: gameID, teamID: teamID)
+        .fullScreenCover(isPresented: Binding(
+            get: { gameStage != .none },
+            set: { newVal in if !newVal { gameStage = .none } }
+        )) {
+            switch gameStage {
+            case .username:
+                UsernamePromptView(gameID: gameID) { enteredUsername in
+                    self.username = enteredUsername
+                    self.gameStage = .lobby
+                }
+            case .lobby:
+                LobbyView(gameID: gameID)
+            case .none:
+                EmptyView()
+            }
         }
     }
 
@@ -46,55 +60,19 @@ struct CreateGameView: View {
         let db = Firestore.firestore()
         let gameRef = db.collection("games").document()
         let newGameID = gameRef.documentID
-        let newTeamID = "Team-\(uid.prefix(6))"
-        self.teamID = newTeamID
 
-        // Fetch username and teamName from /players/{uid}
-        db.collection("players").document(uid).getDocument { snapshot, error in
-            guard let data = snapshot?.data(),
-                  let username = data["username"] as? String,
-                  let teamName = data["teamName"] as? String else {
-                errorMessage = "Missing player info"
-                return
-            }
+        let gameData: [String: Any] = [
+            "createdBy": uid,
+            "startTime": Timestamp()
+        ]
 
-            // Create game doc
-            let gameData: [String: Any] = [
-                "createdBy": uid,
-                "startTime": Timestamp()
-            ]
-
-            let playerData: [String: Any] = [
-                "uid": uid,
-                "username": username
-            ]
-
-            let teamData: [String: Any] = [
-                "teamName": teamName
-            ]
-
-            gameRef.setData(gameData) { error in
-                if let error = error {
-                    errorMessage = "Error creating game: \(error.localizedDescription)"
-                    return
-                }
-
-                let teamRef = gameRef.collection("teams").document(newTeamID)
-                teamRef.setData(teamData) { error in
-                    if let error = error {
-                        errorMessage = "Error creating team: \(error.localizedDescription)"
-                        return
-                    }
-
-                    teamRef.collection("players").document(uid).setData(playerData) { error in
-                        if let error = error {
-                            errorMessage = "Error adding player: \(error.localizedDescription)"
-                            return
-                        }
-
-                        self.gameID = newGameID
-                        self.gameCreated = true
-                    }
+        gameRef.setData(gameData) { error in
+            if let error = error {
+                self.errorMessage = "Error creating game: \(error.localizedDescription)"
+            } else {
+                self.gameID = newGameID
+                DispatchQueue.main.async {
+                    self.gameStage = .username
                 }
             }
         }

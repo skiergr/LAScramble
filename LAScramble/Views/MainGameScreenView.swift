@@ -35,6 +35,13 @@ struct MainGameScreenView: View {
     
     @State private var teamColors: [String: Color] = [:]
     
+    @State private var scale: CGFloat = 1.0
+    @State private var lastScale: CGFloat = 1.0
+
+    @State private var offset: CGSize = .zero
+    @State private var lastOffset: CGSize = .zero
+
+    
     var body: some View {
         Group {
             if gameID.isEmpty || teamID.isEmpty {
@@ -231,27 +238,9 @@ struct MainGameScreenView: View {
                     ZStack {
                         Image("metro_map")
                             .resizable()
-                            .scaledToFit()
-                            .overlay(
-                                GeometryReader { geo in
-                                    Color.clear
-                                        .contentShape(Rectangle())
-                                        .gesture(
-                                            DragGesture(minimumDistance: 0)
-                                                .onEnded { value in
-                                                    let tappedX = value.location.x
-                                                    let tappedY = value.location.y
-                                                    
-                                                    let normalizedX = tappedX / geo.size.width * 1106
-                                                    let normalizedY = tappedY / geo.size.height * 853
-                                                    
-                                                    print("Tapped at raw: x=\(Int(tappedX)), y=\(Int(tappedY))")
-                                                    print("Normalized for sampleStations: x=\(Int(normalizedX)), y=\(Int(normalizedY))")
-                                                }
-                                        )
-                                }
-                            )
+                            .aspectRatio(contentMode: .fit)
 
+                        // Station Dots
                         ForEach(sampleStations) { station in
                             Button(action: {
                                 selectedLine = station.lines.first
@@ -275,14 +264,16 @@ struct MainGameScreenView: View {
                             )
                         }
                     }
+                    .frame(width: geometry.size.width, height: geometry.size.height)
                 }
             }
-            .clipped()
+            .clipped() // prevent overflow
         }
         .frame(height: UIScreen.main.bounds.height * 0.35)
+        .background(Color.white) // ensures visibility in dark mode
     }
 
-    
+
     struct ZoomableScrollView<Content: View>: View {
         @State private var scale: CGFloat = 1.0
         @State private var lastScale: CGFloat = 1.0

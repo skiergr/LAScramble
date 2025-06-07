@@ -16,7 +16,8 @@ struct LAScrambleApp: App {
 
     var body: some Scene {
         WindowGroup {
-            UsernameLoginView()
+            GameMenuView()
+                .preferredColorScheme(.light)
         }
     }
 }

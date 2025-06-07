@@ -10,6 +10,7 @@ struct GameChallenge: Identifiable, Equatable {
 
 let sampleChallenges: [GameChallenge] = [
     GameChallenge(title: "Graffiti Challenge", description: "Find a Metro sign or graffiti tag near LATTC.", station: "Grand/LATTC", line: .A),
+    GameChallenge(title: "Sample challenge", description: "idk rules its a sample fix.", station: "Southwest Museum", line: .A),
     GameChallenge(title: "Historical Challenge", description: "Find a historical marker or plaque in Heritage Square.", station: "Heritage Sq", line: .A),
     GameChallenge(title: "Lantern Challenge", description: "Find a dragon or red lantern in Chinatown.", station: "Chinatown", line: .A),
     GameChallenge(title: "Marquee Challenge", description: "Find an old theater marquee.", station: "Historic Broadway", line: .A),
