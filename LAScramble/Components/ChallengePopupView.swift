@@ -1,64 +1,72 @@
 import SwiftUI
+import FirebaseFirestore
 
 struct ChallengePopupView: View {
     let challenge: GameChallenge
-    var onComplete: () -> Void
-    var onSacrifice: () -> Void
-    var onClose: () -> Void
+    let gameID: String
+    let teamID: String
+    let onComplete: () -> Void
+    let onSacrifice: () -> Void
+    let onFail: () -> Void
+    let onClose: () -> Void
+
     @Binding var selectedStation: Station?
     @Binding var selectedChallenge: GameChallenge?
 
     var body: some View {
-        NavigationView {
-            VStack(spacing: 16) {
-                Text(challenge.title)
-                    .font(.title2)
-                    .bold()
+        VStack(spacing: 16) {
+            Text(challenge.title)
+                .font(.title2)
+                .bold()
 
-                Button(action: {
-                    if let station = sampleStations.first(where: { $0.name == challenge.station }) {
-                        selectedStation = station
-                        selectedChallenge = nil
-                    }
-                }) {
-                    Text("📍 \(challenge.station)")
-                        .font(.caption)
-                        .foregroundColor(.blue)
-                }
+            Text("Station: \(challenge.station)")
+                .font(.headline)
 
-                Text(challenge.description)
-                    .font(.body)
-                    .padding(.horizontal)
+            if let line = challenge.line {
+                Text("Line: \(line.rawValue)")
+                    .font(.subheadline)
+            }
 
-                Button("✅ Mark as Complete") {
-                    onComplete()
-                }
+            Text(challenge.description)
                 .padding()
-                .frame(maxWidth: .infinity)
-                .background(Color.green)
-                .foregroundColor(.white)
+                .background(Color(UIColor.secondarySystemBackground))
                 .cornerRadius(8)
 
-                Button("⚠️ Sacrifice This Challenge") {
-                    onSacrifice()
-                }
-                .padding()
-                .frame(maxWidth: .infinity)
-                .background(Color.red)
-                .foregroundColor(.white)
-                .cornerRadius(8)
+            Button(action: onComplete) {
+                Text("Complete")
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.green)
+                    .foregroundColor(.white)
+                    .cornerRadius(8)
+            }
 
-                Spacer()
+            Button(action: onSacrifice) {
+                Text("Sacrifice")
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.orange)
+                    .foregroundColor(.white)
+                    .cornerRadius(8)
             }
-            .padding()
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Back") {
-                        onClose()
-                    }
+
+            // ✅ Show this only if canFail is true
+            if challenge.canFail == true {
+                Button(action: onFail) {
+                    Label("Fail", systemImage: "xmark.circle")
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.red.opacity(0.7))
+                        .foregroundColor(.white)
+                        .cornerRadius(8)
                 }
             }
+
+            Button("Close") {
+                onClose()
+            }
+            .padding(.top, 8)
         }
+        .padding()
     }
 }

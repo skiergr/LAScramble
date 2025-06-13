@@ -5,6 +5,7 @@ struct StationPopupFullScreenView: View {
     let onUnlock: (MetroLine) -> Void
     let onClose: () -> Void
     let isSacrificed: Bool
+    let failedChallenges: [GameChallenge] // ✅ Pass in array, not isFailed Bool
     let controllingTeamName: String?
     let teamNames: [String: String]
     let myTeamID: String
@@ -14,7 +15,7 @@ struct StationPopupFullScreenView: View {
     let globalCompleted: [GameChallenge]
     let allOtherUnlocked: [String: [GameChallenge]]
     let teamCompletions: [String: [GameChallenge]]
-    
+
     @Binding var selectedChallenge: GameChallenge?
     @Binding var selectedStation: Station?
 
@@ -26,6 +27,7 @@ struct StationPopupFullScreenView: View {
         onUnlock: @escaping (MetroLine) -> Void,
         onClose: @escaping () -> Void,
         isSacrificed: Bool,
+        failedChallenges: [GameChallenge], // ✅ array input
         controllingTeamName: String?,
         teamNames: [String: String],
         myTeamID: String,
@@ -42,6 +44,7 @@ struct StationPopupFullScreenView: View {
         self.onUnlock = onUnlock
         self.onClose = onClose
         self.isSacrificed = isSacrificed
+        self.failedChallenges = failedChallenges
         self.controllingTeamName = controllingTeamName
         self.teamNames = teamNames
         self.myTeamID = myTeamID
@@ -115,7 +118,7 @@ struct StationPopupFullScreenView: View {
                 .cornerRadius(10)
             }
 
-            if !isUnlocked && !isCompleted && !isSacrificed && completedByTeamID == nil {
+            if !isUnlocked && !isCompleted && !isSacrificed && !isFailed && completedByTeamID == nil {
                 Button(action: {
                     guard !isUnlocking else { return }
                     isUnlocking = true
@@ -132,6 +135,13 @@ struct StationPopupFullScreenView: View {
 
             if isSacrificed {
                 Text("You sacrificed this station. You cannot unlock its challenge.")
+                    .font(.footnote)
+                    .foregroundColor(.red)
+                    .padding(.top, 8)
+            }
+
+            if isFailed {
+                Text("You failed this station. You cannot unlock its challenge.")
                     .font(.footnote)
                     .foregroundColor(.red)
                     .padding(.top, 8)
@@ -156,6 +166,10 @@ struct StationPopupFullScreenView: View {
         allCompleted.contains { $0.station == station.name && $0.line == currentLine }
     }
 
+    private var isFailed: Bool {
+        failedChallenges.contains { $0.station == station.name && $0.line == currentLine }
+    }
+
     private var currentChallenge: GameChallenge? {
         (allUnlocked + globalCompleted + allOtherUnlocked.flatMap { $0.value })
             .first { $0.station == station.name && $0.line == currentLine }
@@ -174,6 +188,8 @@ struct StationPopupFullScreenView: View {
             return completedBy == myTeamID ? "Completed" : "Lost"
         } else if isSacrificed {
             return "Sacrificed"
+        } else if isFailed {
+            return "Failed"
         } else if isUnlocked {
             return "Unlocked"
         } else {
@@ -184,7 +200,7 @@ struct StationPopupFullScreenView: View {
     private var statusColor: Color {
         if let completedBy = completedByTeamID {
             return completedBy == myTeamID ? .green : .red
-        } else if isSacrificed {
+        } else if isSacrificed || isFailed {
             return .red
         } else if isUnlocked {
             return .orange

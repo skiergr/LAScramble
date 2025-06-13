@@ -40,7 +40,8 @@ struct MainGameScreenView: View {
 
     @State private var offset: CGSize = .zero
     @State private var lastOffset: CGSize = .zero
-
+    
+    @State private var failedChallenges: [GameChallenge] = []
     
     var body: some View {
         Group {
@@ -63,6 +64,7 @@ struct MainGameScreenView: View {
                     selectedLine = nil
                 },
                 isSacrificed: sacrificedStations.contains(station.name),
+                failedChallenges: failedChallenges, // ✅ this is the correct label and type
                 controllingTeamName: controllingTeamForStation(station),
                 teamNames: teamNames,
                 myTeamID: teamID,
@@ -79,6 +81,8 @@ struct MainGameScreenView: View {
         .fullScreenCover(item: $selectedChallenge) { challenge in
             ChallengePopupView(
                 challenge: challenge,
+                gameID: gameID,
+                teamID: teamID,
                 onComplete: {
                     completeChallenge(challenge)
                     selectedChallenge = nil
@@ -87,11 +91,18 @@ struct MainGameScreenView: View {
                     sacrificeChallenge(challenge)
                     selectedChallenge = nil
                 },
-                onClose: { selectedChallenge = nil },
+                onFail: {
+                    failChallenge(challenge)
+                    selectedChallenge = nil
+                },
+                onClose: {
+                    selectedChallenge = nil
+                },
                 selectedStation: $selectedStation,
                 selectedChallenge: $selectedChallenge
             )
         }
+
         .sheet(isPresented: $showScoreDetails) {
             ScoreDetailsView(teamLineCounts: teamLineCounts, teamNames: teamNames)
         }
@@ -138,6 +149,7 @@ struct MainGameScreenView: View {
                 selectedLine = nil
             },
             isSacrificed: sacrificedStations.contains(station.name),
+            failedChallenges: failedChallenges,
             controllingTeamName: controllingTeamForStation(station),
             teamNames: teamNames,
             myTeamID: teamID,
@@ -154,21 +166,27 @@ struct MainGameScreenView: View {
     
     private func challengePopup(challenge: GameChallenge) -> some View {
         ChallengePopupView(
-                challenge: challenge,
-                onComplete: {
-                    completeChallenge(challenge)
-                    selectedChallenge = nil
-                },
-                onSacrifice: {
-                    sacrificeChallenge(challenge)
-                    selectedChallenge = nil
-                },
-                onClose: {
-                    selectedChallenge = nil
-                },
-                selectedStation: $selectedStation,
-                selectedChallenge: $selectedChallenge
-            )
+            challenge: challenge,
+            gameID: gameID,
+            teamID: teamID,
+            onComplete: {
+                completeChallenge(challenge)
+                selectedChallenge = nil
+            },
+            onSacrifice: {
+                sacrificeChallenge(challenge)
+                selectedChallenge = nil
+            },
+            onFail: {
+                failChallenge(challenge)
+                selectedChallenge = nil
+            },
+            onClose: {
+                selectedChallenge = nil
+            },
+            selectedStation: $selectedStation,
+            selectedChallenge: $selectedChallenge
+        )
     }
     
     private func setupListeners() {
@@ -178,6 +196,7 @@ struct MainGameScreenView: View {
         listenForGlobalCompletions()
         updateLineControlScores()
         listenToAllCompletedChallenges()
+        listenForFailedChallenges()
         listenForSacrifices()
         fetchTeamName()
         fetchTeamNames()
@@ -254,9 +273,11 @@ struct MainGameScreenView: View {
                                     unlockedChallenges: unlockedChallenges,
                                     allTeamCompletions: allTeamCompletions,
                                     otherTeamsUnlocked: otherTeamsUnlocked,
+                                    failedChallenges: failedChallenges, // 👈 Add this
                                     teamID: teamID,
                                     teamColors: teamColors
                                 )
+
                             }
                             .position(
                                 x: geometry.size.width * (station.x / 1106),
@@ -348,13 +369,32 @@ struct MainGameScreenView: View {
     private var challengeListView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {
-                // Active Challenges
-                let activeChallenges = unlockedChallenges.filter { challenge in
-                    !globallyCompleted.contains(where: {
-                        $0.title == challenge.title && $0.station == challenge.station
-                    }) && !sacrificedStations.contains(challenge.station)
-                }
                 
+                // Filter active challenges separately
+                let activeChallenges = unlockedChallenges.filter { challenge in
+                    let isCompleted = globallyCompleted.contains { $0.title == challenge.title && $0.station == challenge.station }
+                    let isSacrificed = sacrificedStations.contains(challenge.station)
+                    let isFailed = failedChallenges.contains { $0.station == challenge.station && $0.line == challenge.line }
+                    return !isCompleted && !isSacrificed && !isFailed
+                }
+
+                // Filter other teams' unlocked challenges separately
+                let othersRaw = otherTeamsUnlocked
+                    .flatMap { (teamID, list) in list.map { (teamID, $0) } }
+
+                let others = othersRaw.filter { (_, ch) in
+                    let isMine = unlockedChallenges.contains { $0.title == ch.title && $0.station == ch.station && $0.line == ch.line }
+                    let isCompleted = globallyCompleted.contains { $0.title == ch.title && $0.station == ch.station && $0.line == ch.line }
+                    let isFailed = failedChallenges.contains { $0.title == ch.title && $0.station == ch.station && $0.line == ch.line }
+                    let isSacrificed = sacrificedStations.contains(ch.station)
+                    return !isMine && !isCompleted && !isFailed && !isSacrificed
+                }
+
+                let completedByOthers = globallyCompleted.filter {
+                    !completedChallenges.contains($0)
+                }
+
+                // Active Challenges
                 if !activeChallenges.isEmpty {
                     Text("Active Challenges").font(.headline)
                     ForEach(activeChallenges) { challenge in
@@ -370,7 +410,7 @@ struct MainGameScreenView: View {
                         }
                     }
                 }
-                
+
                 // Completed Challenges
                 if !completedChallenges.isEmpty {
                     Text("Completed Challenges").font(.headline)
@@ -385,15 +425,8 @@ struct MainGameScreenView: View {
                         .cornerRadius(10)
                     }
                 }
-                
+
                 // Challenges Unlocked by Other Teams
-                let others = otherTeamsUnlocked
-                    .flatMap { (teamID, list) in list.map { (teamID, $0) } }
-                    .filter { (_, ch) in
-                        !unlockedChallenges.contains { $0.title == ch.title && $0.station == ch.station } &&
-                        !globallyCompleted.contains { $0.title == ch.title && $0.station == ch.station }
-                    }
-                
                 if !others.isEmpty {
                     Text("Challenges Unlocked by Other Teams").font(.headline)
                     ForEach(others, id: \.1.id) { (tid, ch) in
@@ -408,12 +441,8 @@ struct MainGameScreenView: View {
                         .cornerRadius(10)
                     }
                 }
-                
+
                 // Completed by Other Teams
-                let completedByOthers = globallyCompleted.filter {
-                    !completedChallenges.contains($0)
-                }
-                
                 if !completedByOthers.isEmpty {
                     Text("Completed by Other Teams").font(.headline)
                     ForEach(completedByOthers) { challenge in
@@ -427,7 +456,7 @@ struct MainGameScreenView: View {
                         .cornerRadius(10)
                     }
                 }
-                
+
                 // Sacrificed Challenges
                 if !sacrificedChallenges.isEmpty {
                     Text("Sacrificed Challenges").font(.headline)
@@ -442,12 +471,26 @@ struct MainGameScreenView: View {
                         .cornerRadius(10)
                     }
                 }
-                
+
+                // Failed Challenges
+                if !failedChallenges.isEmpty {
+                    Text("Failed Challenges").font(.headline)
+                    ForEach(failedChallenges) { challenge in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(challenge.title).italic().foregroundColor(.gray)
+                            Text("\(challenge.station)")
+                        }
+                        .padding()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.red.opacity(0.05))
+                        .cornerRadius(10)
+                    }
+                }
+
             }
             .padding()
         }
     }
-    
     
     func updateLineControlScores() {
         let db = Firestore.firestore()
@@ -501,6 +544,16 @@ struct MainGameScreenView: View {
             return
         }
         
+        if failedChallenges.contains(where: { $0.station == station.name && $0.line == line }) {
+            alertMessage = "You already failed the challenge at this station on this line."
+            selectedStation = nil
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                showAlert = true
+            }
+            return
+        }
+
+        
         if let lockUntil = sacrificedLineLocks[line], lockUntil > Date() {
             let minutes = Int(lockUntil.timeIntervalSinceNow) / 60
             alertMessage = "You sacrificed a challenge on this line. Try again in \(minutes) minutes."
@@ -551,8 +604,14 @@ struct MainGameScreenView: View {
                let stationName = data["station"] as? String,
                let lineRaw = data["line"] as? String,
                let globalLine = MetroLine(rawValue: lineRaw) {
-                
-                let challenge = GameChallenge(title: title, description: description, station: stationName, line: globalLine)
+                let challenge = GameChallenge(
+                    title: title,
+                    description: description,
+                    station: stationName,
+                    line: globalLine,
+                    canFail: data["canFail"] as? Bool ?? true
+                )
+
                 
                 let isCompletedGlobally = globallyCompleted.contains {
                     $0.title == challenge.title && $0.station == station.name && $0.line == line
@@ -581,7 +640,8 @@ struct MainGameScreenView: View {
                     title: random.title,
                     description: random.description,
                     station: random.station,
-                    line: line
+                    line: line,
+                    canFail: random.canFail
                 )
                 
                 let data: [String: Any] = [
@@ -589,7 +649,9 @@ struct MainGameScreenView: View {
                     "description": chosenChallenge.description,
                     "station": chosenChallenge.station,
                     "line": chosenChallenge.line?.rawValue ?? "",
-                    "timestamp": Timestamp()
+                    "timestamp": Timestamp(),
+                    "sacrificed": false,
+                    "canFail": chosenChallenge.canFail ?? true
                 ]
                 
                 stationRef.setData(data) { err in
@@ -611,7 +673,8 @@ struct MainGameScreenView: View {
             "station": challenge.station,
             "line": challenge.line?.rawValue ?? "",
             "timestamp": Timestamp(),
-            "sacrificed": sacrificed // ✅
+            "sacrificed": sacrificed,
+            "canFail": challenge.canFail ?? true  // ✅ FIXED
         ]
         
         let teamRef = Firestore.firestore()
@@ -622,7 +685,7 @@ struct MainGameScreenView: View {
         let rawID = "\(challenge.station)_\(challenge.title)_\(challenge.line?.rawValue ?? "")"
         let docID = rawID
             .replacingOccurrences(of: "[^a-zA-Z0-9_]+", with: "_", options: .regularExpression)
-            .replacingOccurrences(of: "_+", with: "_") // Optional cleanup
+            .replacingOccurrences(of: "_+", with: "_")
             .trimmingCharacters(in: CharacterSet(charactersIn: "_"))
         
         teamRef.document(docID).setData(data) { error in
@@ -636,7 +699,39 @@ struct MainGameScreenView: View {
         print("✅ Challenge '\(challenge.title)' added to unlockedChallenges for team \(teamID)")
     }
     
-    
+    func failChallenge(_ challenge: GameChallenge) {
+        // Remove from local list
+        unlockedChallenges.removeAll { $0.id == challenge.id }
+
+        // Save to failedChallenges
+        let data: [String: Any] = [
+            "title": challenge.title,
+            "station": challenge.station,
+            "line": challenge.line?.rawValue ?? "",
+            "timestamp": Timestamp()
+        ]
+
+        Firestore.firestore().collection("games").document(gameID)
+            .collection("teams").document(teamID)
+            .collection("failedChallenges").addDocument(data: data)
+
+        // ✅ Delete from unlockedChallenges in Firestore (so other teams won’t see it)
+        let safeStation = challenge.station.replacingOccurrences(of: "[^a-zA-Z0-9_]+", with: "_", options: .regularExpression)
+        let safeTitle = challenge.title.replacingOccurrences(of: "[^a-zA-Z0-9_]+", with: "_", options: .regularExpression)
+        let safeLine = challenge.line?.rawValue ?? ""
+        let docID = "\(safeStation)_\(safeTitle)_\(safeLine)"
+            .replacingOccurrences(of: "_+", with: "_")
+            .trimmingCharacters(in: CharacterSet(charactersIn: "_"))
+
+        Firestore.firestore().collection("games").document(gameID)
+            .collection("teams").document(teamID)
+            .collection("unlockedChallenges")
+            .document(docID)
+            .delete()
+
+        print("❌ Marked challenge as failed and deleted from unlocked: \(challenge.title)")
+    }
+
     func completeChallenge(_ challenge: GameChallenge) {
         if sacrificedStations.contains(challenge.station) {
             alertMessage = "You sacrificed this station. You cannot complete its challenge."
@@ -690,9 +785,32 @@ struct MainGameScreenView: View {
                         title: d["title"] as? String ?? "",
                         description: d["description"] as? String ?? "",
                         station: d["station"] as? String ?? "",
-                        line: MetroLine(rawValue: d["line"] as? String ?? "")
+                        line: MetroLine(rawValue: d["line"] as? String ?? ""),
+                        canFail: d["canFail"] as? Bool
                     )
                 }
+            }
+    }
+    
+    func listenForFailedChallenges() {
+        let db = Firestore.firestore()
+        db.collection("games").document(gameID)
+            .collection("teams").document(teamID)
+            .collection("failedChallenges")
+            .addSnapshotListener { snapshot, error in
+                guard let docs = snapshot?.documents else { return }
+
+                let failed = docs.map { doc in
+                    GameChallenge(
+                        title: doc["title"] as? String ?? "",
+                        description: "",
+                        station: doc["station"] as? String ?? "",
+                        line: MetroLine(rawValue: doc["line"] as? String ?? ""),
+                        canFail: nil
+                    )
+                }
+
+                self.failedChallenges = failed
             }
     }
     
@@ -717,10 +835,11 @@ struct MainGameScreenView: View {
                         let challenges = docs.map { d in
                             let data = d.data()
                             return GameChallenge(
-                                title: data["title"] as? String ?? "",
-                                description: data["description"] as? String ?? "",
-                                station: data["station"] as? String ?? "",
-                                line: MetroLine(rawValue: data["line"] as? String ?? "")
+                                title: d["title"] as? String ?? "",
+                                description: d["description"] as? String ?? "",
+                                station: d["station"] as? String ?? "",
+                                line: MetroLine(rawValue: d["line"] as? String ?? ""),
+                                canFail: d["canFail"] as? Bool
                             )
                         }
                         
@@ -746,9 +865,9 @@ struct MainGameScreenView: View {
                         title: d["title"] as? String ?? "",
                         description: d["description"] as? String ?? "",
                         station: d["station"] as? String ?? "",
-                        line: MetroLine(rawValue: d["line"] as? String ?? "")
+                        line: MetroLine(rawValue: d["line"] as? String ?? ""),
+                        canFail: d["canFail"] as? Bool
                     )
-                    
                 }
             }
     }
@@ -764,7 +883,8 @@ struct MainGameScreenView: View {
                         title: d["title"] as? String ?? "",
                         description: d["description"] as? String ?? "",
                         station: d["station"] as? String ?? "",
-                        line: MetroLine(rawValue: d["line"] as? String ?? "")
+                        line: MetroLine(rawValue: d["line"] as? String ?? ""),
+                        canFail: d["canFail"] as? Bool
                     )
                 }
                 print("Global completions updated: \(self.globallyCompleted.count)")
@@ -807,7 +927,8 @@ struct MainGameScreenView: View {
                         title: d["title"] as? String ?? "",
                         description: d["description"] as? String ?? "",
                         station: d["station"] as? String ?? "",
-                        line: MetroLine(rawValue: d["line"] as? String ?? "")
+                        line: MetroLine(rawValue: d["line"] as? String ?? ""),
+                        canFail: d["canFail"] as? Bool
                     )
                 }
                 self.otherTeamsUnlocked[id] = challenges
@@ -904,6 +1025,7 @@ struct MainGameScreenView: View {
         let unlockedChallenges: [GameChallenge]
         let allTeamCompletions: [String: [GameChallenge]]
         let otherTeamsUnlocked: [String: [GameChallenge]]
+        let failedChallenges: [GameChallenge]
         let teamID: String
         let teamColors: [String: Color]
         
@@ -933,29 +1055,36 @@ struct MainGameScreenView: View {
                         .fill(line.color)
                     }
                     
-                    // Inner circle segments (team states)
+                    // Inner circle segments (status fill colors)
                     ForEach(Array(station.lines.enumerated()), id: \.offset) { index, line in
                         let angleSize = 360.0 / Double(station.lines.count)
                         let startAngle = Angle(degrees: angleSize * Double(index) - 90)
                         let endAngle = Angle(degrees: angleSize * Double(index + 1) - 90)
                         
                         let sacrificed = sacrificedStations.contains(stationName)
+                        let failed = failedChallenges.contains { $0.station == stationName && $0.line == line }
                         let myCompleted = completedChallenges.contains { $0.station == stationName && $0.line == line }
                         let myUnlocked = unlockedChallenges.contains { $0.station == stationName && $0.line == line }
                         let globally = globallyCompleted.first { $0.station == stationName && $0.line == line }
                         let completedBy = globally.flatMap { challenge in
                             allTeamCompletions.first { $0.value.contains(challenge) }?.key
                         }
-                        let unlockedByOther = otherTeamsUnlocked.contains {
-                            $0.value.contains { $0.station == stationName && $0.line == line }
-                        }
-                        let otherTeam = otherTeamsUnlocked.first {
-                            $0.value.contains { $0.station == stationName && $0.line == line }
-                        }?.key
+                        let otherTeam = otherTeamsUnlocked.first(where: { (teamID, challenges) in
+                            challenges.contains(where: { challenge in
+                                challenge.station == stationName &&
+                                challenge.line == line &&
+                                !failedChallenges.contains(where: {
+                                    $0.station == challenge.station && $0.line == challenge.line
+                                })
+                            })
+                        })?.key
+
                         
                         let fillColor: Color = {
                             if sacrificed {
                                 return .gray
+                            } else if failed {
+                                return .black
                             } else if myCompleted {
                                 return teamColors[teamID] ?? .blue
                             } else if let team = completedBy {
@@ -979,7 +1108,7 @@ struct MainGameScreenView: View {
                         .fill(fillColor)
                     }
                     
-                    // Segmented or centered symbols
+                    // Symbols: ✔ or ✖ (centered or segmented)
                     if station.lines.count == 1 {
                         let line = station.lines[0]
                         let myCompleted = completedChallenges.contains { $0.station == stationName && $0.line == line }
@@ -988,9 +1117,10 @@ struct MainGameScreenView: View {
                             allTeamCompletions.first { $0.value.contains(challenge) }?.key
                         }
                         let sacrificed = sacrificedStations.contains(stationName)
-                        
+                        let failed = failedChallenges.contains { $0.station == stationName && $0.line == line }
+
                         let symbol: String? = {
-                            if sacrificed {
+                            if sacrificed || failed {
                                 return "✖"
                             } else if myCompleted {
                                 return "✔"
@@ -1021,9 +1151,10 @@ struct MainGameScreenView: View {
                                 allTeamCompletions.first { $0.value.contains(challenge) }?.key
                             }
                             let sacrificed = sacrificedStations.contains(stationName)
+                            let failed = failedChallenges.contains { $0.station == stationName && $0.line == line }
                             
                             let symbol: String? = {
-                                if sacrificed {
+                                if sacrificed || failed {
                                     return "✖"
                                 } else if myCompleted {
                                     return "✔"
@@ -1047,6 +1178,7 @@ struct MainGameScreenView: View {
             .frame(width: 22, height: 22)
         }
     }
+
     
     
     func startLineControlListener() {
@@ -1187,7 +1319,8 @@ struct MainGameScreenView: View {
                             title: title,
                             description: description,
                             station: station,
-                            line: line
+                            line: line,
+                            canFail: nil
                         ))
                     }
                 }
