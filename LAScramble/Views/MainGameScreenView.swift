@@ -20,9 +20,6 @@ struct MainGameScreenView: View {
     @State private var teamNames: [String: String] = [:]
     @State private var showSidebar = false
 
-    @State private var timeRemaining: TimeInterval = 0
-    @State private var timerEnded = false
-    let gameDuration: TimeInterval = 2*60*60;
     @State private var timer: Timer?
     @State private var selectedLine: MetroLine?
     
@@ -43,6 +40,13 @@ struct MainGameScreenView: View {
     
     @State private var failedChallenges: [GameChallenge] = []
     
+    @State private var gameDurationFromDB: Int = 0
+    @State private var sacrificeDurationFromDB: Int = 0
+    @State private var timeRemaining: TimeInterval = 0
+    @State private var timerEnded = false
+    @State private var isGameInitialized = false
+
+
     var body: some View {
         Group {
             if gameID.isEmpty || teamID.isEmpty {
@@ -114,7 +118,7 @@ struct MainGameScreenView: View {
                 teamLineCounts: teamLineCounts
             )
         }
-        .fullScreenCover(isPresented: $timerEnded) {
+        .fullScreenCover(isPresented: .constant(isGameInitialized && timerEnded)) {
             EndGameView(gameID: gameID)
         }
         .alert(isPresented: $showAlert) {
@@ -200,45 +204,93 @@ struct MainGameScreenView: View {
         listenForSacrifices()
         fetchTeamName()
         fetchTeamNames()
-        fetchStartTimeAndBeginTimer()
         startLineControlListener()
         fetchTeamColors()
+        loadGameSettings()
     }
     
+    func loadGameSettings() {
+        let gameRef = Firestore.firestore().collection("games").document(gameID)
+        gameRef.getDocument { snapshot, error in
+            if let data = snapshot?.data() {
+                let durationMinutes = data["gameDurationMinutes"] as? Int ?? 120
+                let sacrificeMinutes = data["sacrificeDurationMinutes"] as? Int ?? 20
+
+                self.gameDurationFromDB = durationMinutes
+                self.sacrificeDurationFromDB = sacrificeMinutes
+
+                if let timestamp = data["startTime"] as? Timestamp {
+                    let startTime = timestamp.dateValue()
+                    let endTime = startTime.addingTimeInterval(TimeInterval(durationMinutes * 60))
+                    let remaining = endTime.timeIntervalSinceNow
+
+                    DispatchQueue.main.async {
+                        self.timeRemaining = max(remaining, 0)
+                        self.timerEnded = remaining <= 0
+                    }
+
+                    if remaining > 0 {
+                        self.timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
+                            DispatchQueue.main.async {
+                                self.timeRemaining -= 1
+                                if self.timeRemaining <= 0 {
+                                    self.timerEnded = true
+                                    self.timer?.invalidate()
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        self.isGameInitialized = true
+    }
+
+
+    func startTimer() {
+        Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { timer in
+            if self.timeRemaining > 0 {
+                self.timeRemaining -= 1
+            } else {
+                self.timerEnded = true
+                timer.invalidate()
+            }
+        }
+    }
+
     
     // MARK: - Main Game UI Extracted to Reduce Complexity
     private var mainGameContent: some View {
         VStack(spacing: 0) {
-            HStack {
-                HStack(spacing: 8) {
-                    Circle()
-                        .fill(teamColors[teamID] ?? .gray)
-                        .frame(width: 10, height: 10)
-                    
-                    Text(teamName)
-                        .font(.headline)
-                }
-                .padding(.bottom, 2)
+            HStack(spacing: 10) {
+                Circle()
+                    .fill(teamColors[teamID] ?? .gray)
+                    .frame(width: 8, height: 8)
                 
-                Text("\(formatTime(timeRemaining))")
+                Text(teamName)
                     .font(.subheadline)
+                    .lineLimit(1)
+
+                Text(formatTime(timeRemaining))
+                    .font(.footnote)
                     .foregroundColor(.gray)
+
                 if let lockedLine = sacrificedLineLocks.first(where: { $0.value > Date() }) {
                     Spacer()
                     let minutesLeft = Int(lockedLine.value.timeIntervalSinceNow) / 60
-                    Text("Line \(lockedLine.key.rawValue) locked for \(minutesLeft)m")
-                        .font(.caption)
+                    Text("Line \(lockedLine.key.rawValue) locked: \(minutesLeft)m")
+                        .font(.caption2)
                         .foregroundColor(.red)
                 }
+
                 Spacer()
                 Button(action: { showSidebar.toggle() }) {
                     Image(systemName: "line.3.horizontal")
-                        .font(.title2)
-                        .padding()
+                        .font(.body)
+                        .padding(.horizontal, 8)
                 }
             }
-            .padding(.horizontal)
-            
+            .padding(.horizontal, 10)
             
             ScoreboardHeaderView(controlledLineCounts: controlledLineCounts, teamNames: teamNames) {
                 showScoreDetails = true
@@ -273,26 +325,27 @@ struct MainGameScreenView: View {
                                     unlockedChallenges: unlockedChallenges,
                                     allTeamCompletions: allTeamCompletions,
                                     otherTeamsUnlocked: otherTeamsUnlocked,
-                                    failedChallenges: failedChallenges, // 👈 Add this
+                                    failedChallenges: failedChallenges,
                                     teamID: teamID,
                                     teamColors: teamColors
                                 )
-
                             }
                             .position(
-                                x: geometry.size.width * (station.x / 1106),
-                                y: geometry.size.height * (station.y / 853)
+                                x: geometry.size.width * (station.x / 2551),
+                                y: geometry.size.height * (station.y / 2551)
                             )
                         }
                     }
                     .frame(width: geometry.size.width, height: geometry.size.height)
                 }
             }
-            .clipped() // prevent overflow
+            .clipped()
+            .contentShape(Rectangle())
         }
-        .frame(height: UIScreen.main.bounds.height * 0.35)
-        .background(Color.white) // ensures visibility in dark mode
+        .frame(width: UIScreen.main.bounds.width, height: UIScreen.main.bounds.width)
+        .background(Color.white)
     }
+
 
 
     struct ZoomableScrollView<Content: View>: View {
@@ -543,9 +596,9 @@ struct MainGameScreenView: View {
             }
             return
         }
-        
-        if failedChallenges.contains(where: { $0.station == station.name && $0.line == line }) {
-            alertMessage = "You already failed the challenge at this station on this line."
+
+        if failedChallenges.contains(where: { $0.station == station.name }) {
+            alertMessage = "You already failed a challenge at this station."
             selectedStation = nil
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                 showAlert = true
@@ -553,7 +606,6 @@ struct MainGameScreenView: View {
             return
         }
 
-        
         if let lockUntil = sacrificedLineLocks[line], lockUntil > Date() {
             let minutes = Int(lockUntil.timeIntervalSinceNow) / 60
             alertMessage = "You sacrificed a challenge on this line. Try again in \(minutes) minutes."
@@ -563,25 +615,15 @@ struct MainGameScreenView: View {
             }
             return
         }
-        
+
         print("Attempting to unlock challenge for station: \(station.name) on line \(line.rawValue)")
-        
-        let db = Firestore.firestore()
-        
-        // Use both station + line in the global ID
-        let safeStationLineID = "\(station.name)_\(line.rawValue)"
-            .replacingOccurrences(of: "[^a-zA-Z0-9_]+", with: "_", options: .regularExpression)
-        
-        let stationRef = db.collection("games").document(gameID)
-            .collection("stationChallenges").document(safeStationLineID)
-        
+
+        // Limit active unlocks
         let activeUnlocked = unlockedChallenges.filter { challenge in
             !sacrificedStations.contains(challenge.station) &&
-            !globallyCompleted.contains(where: {
-                $0.station == challenge.station && $0.title == challenge.title && $0.line == challenge.line
-            })
+            !globallyCompleted.contains(where: { $0.station == challenge.station && $0.title == challenge.title })
         }
-        
+
         if activeUnlocked.count >= 2 {
             selectedStation = nil
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
@@ -590,114 +632,54 @@ struct MainGameScreenView: View {
             }
             return
         }
-        
-        stationRef.getDocument { snapshot, error in
-            guard error == nil else {
-                print("❌ Firestore error: \(error!.localizedDescription)")
-                return
-            }
-            
-            if let snapshot = snapshot, snapshot.exists,
-               let data = snapshot.data(),
-               let title = data["title"] as? String,
-               let description = data["description"] as? String,
-               let stationName = data["station"] as? String,
-               let lineRaw = data["line"] as? String,
-               let globalLine = MetroLine(rawValue: lineRaw) {
-                let challenge = GameChallenge(
-                    title: title,
-                    description: description,
-                    station: stationName,
-                    line: globalLine,
-                    canFail: data["canFail"] as? Bool ?? true
-                )
 
-                
-                let isCompletedGlobally = globallyCompleted.contains {
-                    $0.title == challenge.title && $0.station == station.name && $0.line == line
-                }
-                
-                guard !isCompletedGlobally else {
-                    print("Challenge '\(challenge.title)' already completed at \(station.name) on line \(line.rawValue)")
-                    return
-                }
-                
-                print("Found existing challenge: \(challenge.title)")
-                self.saveChallengeToUnlocked(challenge)
-                
-            } else {
-                // Document doesn't exist — fallback to random challenge
-                print("📄 No existing station challenge found for \(station.name) on \(line.rawValue) — selecting random.")
-                
-                let options = sampleChallenges.filter { $0.station == station.name && $0.line == line }
-                
-                guard let random = options.randomElement() else {
-                    print("❌ No challenges available for station: \(station.name) on \(line.rawValue)")
-                    return
-                }
-                
-                let chosenChallenge = GameChallenge(
-                    title: random.title,
-                    description: random.description,
-                    station: random.station,
-                    line: line,
-                    canFail: random.canFail
-                )
-                
-                let data: [String: Any] = [
-                    "title": chosenChallenge.title,
-                    "description": chosenChallenge.description,
-                    "station": chosenChallenge.station,
-                    "line": chosenChallenge.line?.rawValue ?? "",
-                    "timestamp": Timestamp(),
-                    "sacrificed": false,
-                    "canFail": chosenChallenge.canFail ?? true
-                ]
-                
-                stationRef.setData(data) { err in
-                    if let err = err {
-                        print("Failed to save global challenge: \(err.localizedDescription)")
-                    } else {
-                        print("✅ Global challenge set for \(station.name) on line \(line.rawValue): \(chosenChallenge.title)")
-                        self.saveChallengeToUnlocked(chosenChallenge)
-                    }
-                }
-            }
+        // Determine used titles in this game
+        let usedTitles = Set(
+            globallyCompleted.map(\.title) +
+            unlockedChallenges.map(\.title) +
+            completedChallenges.map(\.title) +
+            failedChallenges.map(\.title)
+        )
+
+        // Available challenge pools
+        let availableSpecific = sampleChallenges.filter {
+            $0.station == station.name && !usedTitles.contains($0.title)
         }
-    }
-    
-    func saveChallengeToUnlocked(_ challenge: GameChallenge, sacrificed: Bool = false) {
-        let data: [String: Any] = [
-            "title": challenge.title,
-            "description": challenge.description,
-            "station": challenge.station,
-            "line": challenge.line?.rawValue ?? "",
-            "timestamp": Timestamp(),
-            "sacrificed": sacrificed,
-            "canFail": challenge.canFail ?? true  // ✅ FIXED
-        ]
-        
-        let teamRef = Firestore.firestore()
-            .collection("games").document(gameID)
-            .collection("teams").document(teamID)
-            .collection("unlockedChallenges")
-        
-        let rawID = "\(challenge.station)_\(challenge.title)_\(challenge.line?.rawValue ?? "")"
-        let docID = rawID
-            .replacingOccurrences(of: "[^a-zA-Z0-9_]+", with: "_", options: .regularExpression)
-            .replacingOccurrences(of: "_+", with: "_")
-            .trimmingCharacters(in: CharacterSet(charactersIn: "_"))
-        
-        teamRef.document(docID).setData(data) { error in
-            if let error = error {
-                print("❌ Failed to set unlocked challenge: \(error.localizedDescription)")
-            } else {
-                print("✅ Challenge saved to unlockedChallenges under \(docID)")
-            }
+
+        let availableGlobal = sampleChallenges.filter {
+            $0.station == "GLOBAL" && !usedTitles.contains($0.title)
         }
-        
-        print("✅ Challenge '\(challenge.title)' added to unlockedChallenges for team \(teamID)")
+
+        // Pick 50/50
+        let trySpecificFirst = Bool.random()
+        let primaryPool = trySpecificFirst ? availableSpecific : availableGlobal
+        let fallbackPool = trySpecificFirst ? availableGlobal : availableSpecific
+
+        let chosen = primaryPool.randomElement() ?? fallbackPool.randomElement()
+
+        guard let selected = chosen else {
+            alertMessage = "No challenges left to unlock at this station."
+            selectedStation = nil
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                showAlert = true
+            }
+            print("❌ No challenge available for \(station.name)")
+            return
+        }
+
+        // Assign line for tracking and coloring
+        let assignedChallenge = GameChallenge(
+            title: selected.title,
+            description: selected.description,
+            station: station.name,
+            line: line,
+            canFail: selected.canFail
+        )
+
+        saveChallengeToUnlocked(assignedChallenge)
+        print("✅ Unlocked challenge '\(assignedChallenge.title)' for \(station.name) on line \(line.rawValue)")
     }
+
     
     func failChallenge(_ challenge: GameChallenge) {
         // Remove from local list
@@ -968,17 +950,19 @@ struct MainGameScreenView: View {
         gameRef.getDocument { snapshot, _ in
             guard let data = snapshot?.data(),
                   let timestamp = data["startTime"] as? Timestamp else { return }
-            
+
             let startTime = timestamp.dateValue()
-            let endTime = startTime.addingTimeInterval(gameDuration)
-            
+            let duration = TimeInterval(self.gameDurationFromDB * 60)
+            let endTime = startTime.addingTimeInterval(duration)
+
             updateRemainingTime(endTime: endTime)
-            
+
             timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
                 updateRemainingTime(endTime: endTime)
             }
         }
     }
+
     
     func updateRemainingTime(endTime: Date) {
         let remaining = endTime.timeIntervalSinceNow
@@ -1175,7 +1159,7 @@ struct MainGameScreenView: View {
                     }
                 }
             }
-            .frame(width: 22, height: 22)
+            .frame(width: 16, height: 16)
         }
     }
 
@@ -1248,7 +1232,7 @@ struct MainGameScreenView: View {
         sacrificedStations.insert(challenge.station)
         
         if let line = challenge.line {
-            sacrificedLineLocks[line] = Date().addingTimeInterval(20*60) // 20 min
+            sacrificedLineLocks[line] = Date().addingTimeInterval(TimeInterval(sacrificeDurationFromDB * 60))
         }
         
         // ✅ Remove from unlockedChallenges
@@ -1364,6 +1348,41 @@ struct MainGameScreenView: View {
             default: return .gray
         }
     }
+    
+    func saveChallengeToUnlocked(_ challenge: GameChallenge, sacrificed: Bool = false) {
+        let data: [String: Any] = [
+            "title": challenge.title,
+            "description": challenge.description,
+            "station": challenge.station,
+            "line": challenge.line?.rawValue ?? "",
+            "timestamp": Timestamp(),
+            "sacrificed": sacrificed,
+            "canFail": challenge.canFail ?? true
+        ]
+
+        let teamRef = Firestore.firestore()
+            .collection("games").document(gameID)
+            .collection("teams").document(teamID)
+            .collection("unlockedChallenges")
+
+        let rawID = "\(challenge.station)_\(challenge.title)_\(challenge.line?.rawValue ?? "")"
+        let docID = rawID
+            .replacingOccurrences(of: "[^a-zA-Z0-9_]+", with: "_", options: .regularExpression)
+            .replacingOccurrences(of: "_+", with: "_")
+            .trimmingCharacters(in: CharacterSet(charactersIn: "_"))
+
+        teamRef.document(docID).setData(data) { error in
+            if let error = error {
+                print("❌ Failed to set unlocked challenge: \(error.localizedDescription)")
+            } else {
+                print("✅ Challenge saved to unlockedChallenges under \(docID)")
+            }
+        }
+
+        print("✅ Challenge '\(challenge.title)' added to unlockedChallenges for team \(teamID)")
+    }
+
+    
 }
 
 

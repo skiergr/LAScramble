@@ -6,23 +6,26 @@ struct ScoreboardHeaderView: View {
     var onTap: () -> Void
 
     var body: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: 2) {
             Text("Line Control")
-                .font(.headline)
+                .font(.subheadline)
+                .fontWeight(.semibold)
 
-            HStack {
+            HStack(spacing: 4) {
                 ForEach(controlledLineCounts.keys.sorted(), id: \.self) { teamID in
                     let teamLabel = teamNames[teamID] ?? "Team \(teamID.prefix(6))"
                     let linesControlled = controlledLineCounts[teamID] ?? 0
-                    Text("\(teamLabel): \(linesControlled) lines")
+                    Text("\(teamLabel): \(linesControlled)")
+                        .font(.caption)
                         .frame(maxWidth: .infinity)
-                        .bold()
+                        .lineLimit(1)
                 }
             }
         }
-        .padding()
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
         .background(Color(UIColor.secondarySystemBackground))
-        .cornerRadius(12)
+        .cornerRadius(10)
         .onTapGesture { onTap() }
     }
 }

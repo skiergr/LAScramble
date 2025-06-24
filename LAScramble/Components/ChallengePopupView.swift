@@ -22,8 +22,8 @@ struct ChallengePopupView: View {
             Text("Station: \(challenge.station)")
                 .font(.headline)
 
-            if let line = challenge.line {
-                Text("Line: \(line.rawValue)")
+            if let station = selectedStation, !station.lines.isEmpty {
+                Text("Line: \(station.lines.map { $0.rawValue }.joined(separator: ", "))")
                     .font(.subheadline)
             }
 
@@ -53,10 +53,10 @@ struct ChallengePopupView: View {
             // ✅ Show this only if canFail is true
             if challenge.canFail == true {
                 Button(action: onFail) {
-                    Label("Fail", systemImage: "xmark.circle")
+                    Text("Fail")
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(Color.red.opacity(0.7))
+                        .background(Color.red)
                         .foregroundColor(.white)
                         .cornerRadius(8)
                 }

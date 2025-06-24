@@ -12,10 +12,27 @@ struct CreateGameView: View {
     @State private var username: String = ""
     @State private var errorMessage: String?
 
+    // ✅ New fields
+    @State private var gameDurationInput: String = "120"
+    @State private var sacrificeDurationInput: String = "20"
+
     var body: some View {
         VStack(spacing: 20) {
             Text("Start a New Game")
                 .font(.title2)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Game Duration (minutes)")
+                TextField("e.g. 120", text: $gameDurationInput)
+                    .keyboardType(.numberPad)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+
+                Text("Sacrifice Lockout Time (minutes)")
+                TextField("e.g. 20", text: $sacrificeDurationInput)
+                    .keyboardType(.numberPad)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+            }
+            .padding(.horizontal)
 
             Button("Create Game") {
                 createGame()
@@ -56,6 +73,12 @@ struct CreateGameView: View {
             return
         }
 
+        guard let gameDuration = Int(gameDurationInput),
+              let sacrificeDuration = Int(sacrificeDurationInput) else {
+            errorMessage = "Please enter valid numbers for duration."
+            return
+        }
+
         let uid = user.uid
         let db = Firestore.firestore()
         let gameRef = db.collection("games").document()
@@ -63,7 +86,9 @@ struct CreateGameView: View {
 
         let gameData: [String: Any] = [
             "createdBy": uid,
-            "startTime": Timestamp()
+            "startTime": Timestamp(),
+            "gameDurationMinutes": gameDuration,
+            "sacrificeDurationMinutes": sacrificeDuration
         ]
 
         gameRef.setData(gameData) { error in
