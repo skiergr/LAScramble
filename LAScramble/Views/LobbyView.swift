@@ -9,6 +9,7 @@ enum LobbyStage {
 struct LobbyView: View {
     let gameID: String
 
+    @Environment(\.presentationMode) var presentationMode
     @State private var teams: [String: [String]] = [:]
     @State private var teamNames: [String: String] = [:]
     @State private var selectedColors: [String: String] = [:]
@@ -23,94 +24,116 @@ struct LobbyView: View {
     @State private var stage: LobbyStage = .none
     @State private var alertMessage = ""
     @State private var showColorAlert = false
-    
+    @State private var showLeaveConfirm = false
+
     @State private var allPlayersAssigned = false
 
     let availableColors = ["blue", "green", "red", "purple", "orange", "pink", "yellow"]
 
     var body: some View {
-        VStack {
-            Text("Lobby").font(.largeTitle).padding(.top)
-            Text("Game ID: \(gameID)")
-                .font(.subheadline)
-                .foregroundColor(.gray)
-                .padding(.bottom)
+        NavigationView {
+            VStack {
+                Text("Lobby").font(.largeTitle).padding(.top)
+                Text("Game ID: \(gameID)")
+                    .font(.subheadline)
+                    .foregroundColor(.gray)
+                    .padding(.bottom)
 
-            ScrollView {
-                ForEach(teams.keys.sorted(), id: \.self) { teamID in
-                    VStack(alignment: .leading) {
-                        HStack {
-                            Circle()
-                                .fill(teamColors[teamID] ?? .gray)
-                                .frame(width: 12, height: 12)
+                ScrollView {
+                    ForEach(teams.keys.sorted(), id: \.self) { teamID in
+                        VStack(alignment: .leading) {
+                            HStack {
+                                Circle()
+                                    .fill(teamColors[teamID] ?? .gray)
+                                    .frame(width: 12, height: 12)
 
-                            Text(teamNames[teamID] ?? "Unnamed Team")
-                                .font(.headline)
+                                Text(teamNames[teamID] ?? "Unnamed Team")
+                                    .font(.headline)
 
-                            Spacer()
+                                Spacer()
 
-                            if myTeamID == nil {
-                                Button("Join") {
-                                    joinTeam(teamID: teamID)
+                                if myTeamID == nil {
+                                    Button("Join") {
+                                        joinTeam(teamID: teamID)
+                                    }
+                                    .buttonStyle(.bordered)
+                                } else if myTeamID == teamID {
+                                    Text("Joined").font(.caption).foregroundColor(.green)
                                 }
-                                .buttonStyle(.bordered)
-                            } else if myTeamID == teamID {
-                                Text("Joined").font(.caption).foregroundColor(.green)
+                            }
+
+                            ForEach(teams[teamID] ?? [], id: \.self) { player in
+                                Text(player).font(.subheadline)
                             }
                         }
+                        .padding()
+                        .background(Color(UIColor.secondarySystemBackground))
+                        .cornerRadius(10)
+                        .padding(.horizontal)
+                    }
+                }
 
-                        ForEach(teams[teamID] ?? [], id: \.self) { player in
-                            Text(player).font(.subheadline)
-                        }
+                if myTeamID == nil {
+                    Button("Create New Team") {
+                        stage = .createTeam
                     }
                     .padding()
-                    .background(Color(UIColor.secondarySystemBackground))
-                    .cornerRadius(10)
-                    .padding(.horizontal)
                 }
-            }
 
-            if myTeamID == nil {
-                Button("Create New Team") {
-                    stage = .createTeam
+                if isCreator {
+                    Button("Start Game") {
+                        startGame()
+                    }
+                    .padding()
+                    .background(Color.green)
+                    .foregroundColor(.white)
+                    .cornerRadius(8)
                 }
-                .padding()
-            }
 
-            if isCreator {
-                Button("Start Game") {
-                    startGame()
-                }
-                .padding()
-                .background(Color.green)
-                .foregroundColor(.white)
-                .cornerRadius(8)
+                Spacer()
             }
-        }
-        .onAppear {
-            fetchLiveLobbyData()
-            fetchUsername()
-            checkIfCreator()
-            listenForStart()
-        }
-        .alert(isPresented: $showColorAlert) {
-            Alert(title: Text("Color Taken"),
-                  message: Text(alertMessage),
-                  dismissButton: .default(Text("OK")))
-        }
-        .fullScreenCover(isPresented: Binding(
-            get: { stage != .none },
-            set: { newVal in if !newVal { stage = .none } }
-        )) {
-            switch stage {
-            case .createTeam:
-                createTeamSheet
-            case .inGame:
-                if let teamID = myTeamID {
-                    MainGameScreenView(gameID: gameID, teamID: teamID)
+            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarItems(leading:
+                Button(action: {
+                    showLeaveConfirm = true
+                }) {
+                    HStack {
+                        Image(systemName: "chevron.left")
+                        Text("Back")
+                    }
                 }
-            case .none:
-                EmptyView()
+            )
+            .alert(isPresented: $showColorAlert) {
+                Alert(title: Text("Notice"), message: Text(alertMessage), dismissButton: .default(Text("OK")))
+            }
+            .confirmationDialog("Leave Game?", isPresented: $showLeaveConfirm, titleVisibility: .visible) {
+                Button("Leave and Clear Game", role: .destructive) {
+                    UserDefaults.standard.removeObject(forKey: "cachedGameID")
+                    UserDefaults.standard.removeObject(forKey: "cachedTeamID")
+                    presentationMode.wrappedValue.dismiss()
+                }
+                Button("Cancel", role: .cancel) {}
+            }
+            .fullScreenCover(isPresented: Binding(
+                get: { stage != .none },
+                set: { newVal in if !newVal { stage = .none } }
+            )) {
+                switch stage {
+                case .createTeam:
+                    createTeamSheet
+                case .inGame:
+                    if let teamID = myTeamID {
+                        MainGameScreenView(gameID: gameID, teamID: teamID)
+                    }
+                case .none:
+                    EmptyView()
+                }
+            }
+            .onAppear {
+                fetchLiveLobbyData()
+                fetchUsername()
+                checkIfCreator()
+                listenForStart()
             }
         }
     }
@@ -206,22 +229,6 @@ struct LobbyView: View {
                 self.teamColors = newTeamColors
             }
         }
-        // Fetch all players and compare
-        Firestore.firestore()
-            .collection("games").document(gameID)
-            .collection("players").getDocuments { snapshot, _ in
-                guard let allPlayerDocs = snapshot?.documents else { return }
-
-                let allUIDs = Set(allPlayerDocs.map { $0.documentID })
-                let assignedUIDs = Set(teams.values.flatMap { $0 })  // usernames
-
-                // Cross-reference usernames to UIDs (optional if username == UID)
-                let allUsernames = Set(allPlayerDocs.compactMap { $0.data()["username"] as? String })
-
-                DispatchQueue.main.async {
-                    self.allPlayersAssigned = allUsernames.isSubset(of: assignedUIDs)
-                }
-            }
     }
 
     func checkIfCreator() {
@@ -249,7 +256,6 @@ struct LobbyView: View {
             .collection("games").document(gameID)
             .collection("teams")
 
-        // 1. First check if the chosen color is taken
         teamsRef.whereField("teamColor", isEqualTo: chosenColor).getDocuments { snapshot, error in
             if let error = error {
                 self.alertMessage = "Error checking colors: \(error.localizedDescription)"
@@ -263,7 +269,6 @@ struct LobbyView: View {
                 return
             }
 
-            // 2. Proceed to create the team
             let teamID = "team-\(UUID().uuidString.prefix(6))"
             let teamRef = teamsRef.document(teamID)
 
@@ -284,6 +289,7 @@ struct LobbyView: View {
                 myTeamID = teamID
                 stage = .none
             }
+            UserDefaults.standard.set(teamID, forKey: "cachedTeamID")
         }
     }
 
@@ -302,6 +308,7 @@ struct LobbyView: View {
             .setData(playerData)
 
         myTeamID = teamID
+        UserDefaults.standard.set(teamID, forKey: "cachedTeamID")
     }
 
     func startGame() {

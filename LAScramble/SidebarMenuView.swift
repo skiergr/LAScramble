@@ -12,25 +12,26 @@ struct SidebarMenuView: View {
     var gameID: String
     var teamID: String
     var teamNames: [String: String]
-    var teamLineCounts: [String: [MetroLine: Int]] // NEW
+    var teamLineCounts: [String: [MetroLine: Int]]
 
+    @Environment(\.presentationMode) var presentationMode
     @State private var showLeaderboard = false
     @State private var showRules = false
     @State private var showHelp = false
+    @State private var showLeaveConfirmation = false
+    @State private var leaveGame = false
 
     var body: some View {
         NavigationView {
             List {
                 Section(header: Text("Game Menu")) {
-                    Button("Leaderboard") { showLeaderboard = true }
-                    /*Button("Completed Challenges") {
-                        // Could push a ChallengeListView here
+                    Button("Leaderboard") {
+                        showLeaderboard = true
                     }
-                    Button("Rules") { showRules = true }
-                    Button("Metro Help") { showHelp = true }
-                    Button("Forfeit Game") {
-                        forfeitGame()
-                    }*/
+
+                    Button("Leave Game") {
+                        showLeaveConfirmation = true
+                    }
                     .foregroundColor(.red)
                 }
             }
@@ -44,15 +45,39 @@ struct SidebarMenuView: View {
                     teamNames: teamNames
                 )
             }
+
             .sheet(isPresented: $showRules) {
                 Text("Game Rules Go Here")
                     .padding()
             }
+
             .sheet(isPresented: $showHelp) {
                 Text("Metro Help Content Here")
                     .padding()
             }
+
+            .fullScreenCover(isPresented: $leaveGame) {
+                GameMenuView()
+            }
+
+            // Confirmation Dialog
+            .alert(isPresented: $showLeaveConfirmation) {
+                Alert(
+                    title: Text("Leave Game?"),
+                    message: Text("Are you sure you want to leave the game?"),
+                    primaryButton: .destructive(Text("Leave")) {
+                        leaveGameAction()
+                    },
+                    secondaryButton: .cancel()
+                )
+            }
         }
+    }
+
+    func leaveGameAction() {
+        UserDefaults.standard.removeObject(forKey: "cachedGameID")
+        UserDefaults.standard.removeObject(forKey: "cachedTeamID")
+        leaveGame = true
     }
 
     func forfeitGame() {

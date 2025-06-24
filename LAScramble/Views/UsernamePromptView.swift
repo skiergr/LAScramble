@@ -13,32 +13,47 @@ struct UsernamePromptView: View {
     let gameID: String
     let onComplete: (String) -> Void
 
+    @Environment(\.presentationMode) var presentationMode
     @State private var username = ""
     @State private var errorMessage: String?
 
     var body: some View {
-        VStack(spacing: 20) {
-            Text("Enter Your Username")
-                .font(.title2)
+        NavigationView {
+            VStack(spacing: 20) {
+                Text("Enter Your Username")
+                    .font(.title2)
 
-            TextField("Username", text: $username)
-                .textFieldStyle(RoundedBorderTextFieldStyle())
-                .padding(.horizontal)
+                TextField("Username", text: $username)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .padding(.horizontal)
 
-            Button("Continue") {
-                logInWithUsername()
+                Button("Continue") {
+                    logInWithUsername()
+                }
+                .disabled(username.isEmpty)
+                .padding()
+                .background(Color.blue)
+                .foregroundColor(.white)
+                .cornerRadius(10)
+
+                if let error = errorMessage {
+                    Text(error).foregroundColor(.red)
+                }
+
+                Spacer()
             }
-            .disabled(username.isEmpty)
             .padding()
-            .background(Color.blue)
-            .foregroundColor(.white)
-            .cornerRadius(10)
-
-            if let error = errorMessage {
-                Text(error).foregroundColor(.red)
-            }
+            .navigationBarTitleDisplayMode(.inline)
+            .navigationTitle("Username")
+            .navigationBarItems(leading:
+                Button(action: {
+                    presentationMode.wrappedValue.dismiss()
+                }) {
+                    Image(systemName: "chevron.left")
+                    Text("Back")
+                }
+            )
         }
-        .padding()
     }
 
     func logInWithUsername() {
@@ -64,6 +79,7 @@ struct UsernamePromptView: View {
                     if let err = err {
                         self.errorMessage = "Save failed: \(err.localizedDescription)"
                     } else {
+                        UserDefaults.standard.set(gameID, forKey: "cachedGameID")
                         onComplete(username)
                     }
                 }

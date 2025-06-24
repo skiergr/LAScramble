@@ -81,25 +81,48 @@ struct CreateGameView: View {
 
         let uid = user.uid
         let db = Firestore.firestore()
-        let gameRef = db.collection("games").document()
-        let newGameID = gameRef.documentID
 
-        let gameData: [String: Any] = [
-            "createdBy": uid,
-            "startTime": Timestamp(),
-            "gameDurationMinutes": gameDuration,
-            "sacrificeDurationMinutes": sacrificeDuration
-        ]
+        func generateGameID() -> String {
+            let chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+            return String((0..<5).map { _ in chars.randomElement()! })
+        }
 
-        gameRef.setData(gameData) { error in
-            if let error = error {
-                self.errorMessage = "Error creating game: \(error.localizedDescription)"
-            } else {
-                self.gameID = newGameID
-                DispatchQueue.main.async {
-                    self.gameStage = .username
+        func tryCreateGame() {
+            let newGameID = generateGameID()
+            let gameRef = db.collection("games").document(newGameID)
+
+            gameRef.getDocument { snapshot, error in
+                if let error = error {
+                    self.errorMessage = "Error checking game ID: \(error.localizedDescription)"
+                    return
+                }
+
+                if snapshot?.exists == true {
+                    // ID already taken, try again
+                    tryCreateGame()
+                } else {
+                    // Unique ID, create game
+                    let gameData: [String: Any] = [
+                        "createdBy": uid,
+                        "startTime": Timestamp(),
+                        "gameDurationMinutes": gameDuration,
+                        "sacrificeDurationMinutes": sacrificeDuration
+                    ]
+
+                    gameRef.setData(gameData) { error in
+                        if let error = error {
+                            self.errorMessage = "Error creating game: \(error.localizedDescription)"
+                        } else {
+                            self.gameID = newGameID
+                            DispatchQueue.main.async {
+                                self.gameStage = .username
+                            }
+                        }
+                    }
                 }
             }
         }
+
+        tryCreateGame()
     }
 }
