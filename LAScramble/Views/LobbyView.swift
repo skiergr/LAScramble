@@ -353,7 +353,7 @@ struct LobbyView: View {
                     } else {
                         gameRef.updateData([
                             "hasStarted": true,
-                            "startTime": Timestamp()
+                            "startTime": FieldValue.serverTimestamp()
                         ])
                     }
                 }

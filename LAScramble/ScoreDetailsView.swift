@@ -7,6 +7,41 @@ struct ScoreDetailsView: View {
     var body: some View {
         NavigationView {
             List {
+                // 🔼 Summary section at the top
+                Section(header: Text("Team Scores").font(.headline)) {
+                    let lineWinners: [MetroLine: String] = {
+                        var result = [MetroLine: String]()
+                        for line in MetroLine.allCases {
+                            let maxCount = teamLineCounts.values.map { $0[line] ?? 0 }.max() ?? 0
+                            let contenders = teamLineCounts.filter { $0.value[line] ?? 0 == maxCount && maxCount > 0 }
+                            if contenders.count == 1 {
+                                result[line] = contenders.first!.key
+                            }
+                        }
+                        return result
+                    }()
+
+                    let teamScore: [String: Int] = {
+                        var score = [String: Int]()
+                        for (_, winner) in lineWinners {
+                            score[winner, default: 0] += 1
+                        }
+                        return score
+                    }()
+
+                    ForEach(teamScore.keys.sorted(), id: \.self) { teamID in
+                        let name = teamNames[teamID] ?? "Team \(teamID.prefix(6))"
+                        let score = teamScore[teamID] ?? 0
+                        HStack {
+                            Text(name)
+                            Spacer()
+                            Text("\(score) lines")
+                        }
+                        .foregroundColor(.blue)
+                    }
+                }
+
+                // 🔽 Existing per-line control breakdown
                 ForEach(MetroLine.allCases, id: \.self) { line in
                     Section(header:
                         Text("LINE \(line.rawValue)")

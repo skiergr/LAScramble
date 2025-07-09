@@ -125,17 +125,30 @@ struct EndGameView: View {
     }
 
     func determineWinner() {
+        var lineWinners: [MetroLine: String] = [:]
+        for line in MetroLine.allCases {
+            let maxCount = teamLineCounts.values.map { $0[line] ?? 0 }.max() ?? 0
+            let contenders = teamLineCounts.filter { $0.value[line] ?? 0 == maxCount && maxCount > 0 }
+            if contenders.count == 1, let soleWinner = contenders.first?.key {
+                lineWinners[line] = soleWinner
+            }
+        }
+
+        var teamLineWins: [String: Int] = [:]
+        for (_, winnerTeamID) in lineWinners {
+            teamLineWins[winnerTeamID, default: 0] += 1
+        }
+
         var bestTeam: String?
         var bestLineTotal = -1
-
-        for (teamID, lines) in teamLineCounts {
-            let totalLinesControlled = lines.values.filter { $0 > 0 }.count
-            if totalLinesControlled > bestLineTotal {
+        for (teamID, count) in teamLineWins {
+            if count > bestLineTotal {
                 bestTeam = teamID
-                bestLineTotal = totalLinesControlled
+                bestLineTotal = count
             }
         }
 
         self.winnerTeamID = bestTeam
     }
+
 }

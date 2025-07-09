@@ -19,8 +19,9 @@ struct MainGameScreenView: View {
     @State private var teamName: String = ""
     @State private var teamNames: [String: String] = [:]
     @State private var showSidebar = false
+    
+    @State private var uiTimer: Timer? = nil
 
-    @State private var timer: Timer?
     @State private var selectedLine: MetroLine?
     
     @State private var showAlert = false
@@ -45,6 +46,8 @@ struct MainGameScreenView: View {
     @State private var timeRemaining: TimeInterval = 0
     @State private var timerEnded = false
     @State private var isGameInitialized = false
+    
+    @State private var allChallenges: [GameChallenge] = []
 
 
     var body: some View {
@@ -56,12 +59,16 @@ struct MainGameScreenView: View {
             }
         }
         .onAppear(perform: setupListeners)
+        .onDisappear {
+            uiTimer?.invalidate()
+        }
         .fullScreenCover(item: $selectedStation) { station in
             StationPopupFullScreenView(
                 station: station,
-                onUnlock: { selectedLine in
-                    unlockChallenge(for: station, on: selectedLine)
-                    selectedStation = nil
+                onUnlock: { line, completion in
+                    unlockChallenge(for: station, on: line) { unlocked in
+                        completion(unlocked)
+                    }
                 },
                 onClose: {
                     selectedStation = nil
@@ -144,10 +151,11 @@ struct MainGameScreenView: View {
         
         return StationPopupFullScreenView(
             station: station,
-            onUnlock: { selectedLine in
-                unlockChallenge(for: station, on: selectedLine)
-                selectedStation = nil
-            },
+            onUnlock: { line, completion in
+                    unlockChallenge(for: station, on: line) { unlocked in
+                        completion(unlocked)
+                    }
+                },
             onClose: {
                 selectedStation = nil
                 selectedLine = nil
@@ -207,42 +215,28 @@ struct MainGameScreenView: View {
         startLineControlListener()
         fetchTeamColors()
         loadGameSettings()
+        loadChallenges()
     }
     
-    func loadGameSettings() {
-        let gameRef = Firestore.firestore().collection("games").document(gameID)
-        gameRef.getDocument { snapshot, error in
-            if let data = snapshot?.data() {
-                let durationMinutes = data["gameDurationMinutes"] as? Int ?? 120
-                let sacrificeMinutes = data["sacrificeDurationMinutes"] as? Int ?? 20
-
-                self.gameDurationFromDB = durationMinutes
-                self.sacrificeDurationFromDB = sacrificeMinutes
-
-                if let timestamp = data["startTime"] as? Timestamp {
-                    let startTime = timestamp.dateValue()
-                    let endTime = startTime.addingTimeInterval(TimeInterval(durationMinutes * 60))
-                    let remaining = endTime.timeIntervalSinceNow
-
-                    DispatchQueue.main.async {
-                        self.timeRemaining = max(remaining, 0)
-                        self.timerEnded = remaining <= 0
-                    }
-
-                    if remaining > 0 {
-                        self.timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
-                            DispatchQueue.main.async {
-                                self.timeRemaining -= 1
-                                if self.timeRemaining <= 0 {
-                                    self.timerEnded = true
-                                    self.timer?.invalidate()
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+    func loadChallenges() {
+        fetchAllChallenges { fetched in
+            self.allChallenges = fetched
         }
+    }
+    
+    private func loadGameSettings() {
+        let gameRef = Firestore.firestore()
+            .collection("games").document(gameID)
+
+        gameRef.addSnapshotListener { snapshot, _ in
+            guard let data = snapshot?.data() else { return }
+
+            self.gameDurationFromDB   = data["gameDurationMinutes"]   as? Int ?? 120
+            self.sacrificeDurationFromDB = data["sacrificeDurationMinutes"] as? Int ?? 20
+
+            fetchStartTimeAndBeginTimer()
+        }
+
         self.isGameInitialized = true
     }
 
@@ -587,13 +581,14 @@ struct MainGameScreenView: View {
         }
     }
     
-    func unlockChallenge(for station: Station, on line: MetroLine) {
+    func unlockChallenge(for station: Station, on line: MetroLine, completion: @escaping (GameChallenge?) -> Void) {
         if sacrificedStations.contains(station.name) {
             alertMessage = "You sacrificed this station and can’t unlock it again."
             selectedStation = nil
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                 showAlert = true
             }
+            completion(nil)
             return
         }
 
@@ -603,6 +598,7 @@ struct MainGameScreenView: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                 showAlert = true
             }
+            completion(nil)
             return
         }
 
@@ -613,12 +609,12 @@ struct MainGameScreenView: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                 showAlert = true
             }
+            completion(nil)
             return
         }
 
         print("Attempting to unlock challenge for station: \(station.name) on line \(line.rawValue)")
 
-        // Limit active unlocks
         let activeUnlocked = unlockedChallenges.filter { challenge in
             !sacrificedStations.contains(challenge.station) &&
             !globallyCompleted.contains(where: { $0.station == challenge.station && $0.title == challenge.title })
@@ -630,10 +626,10 @@ struct MainGameScreenView: View {
                 alertMessage = "You already have 2 active challenges. Complete one before unlocking another."
                 showAlert = true
             }
+            completion(nil)
             return
         }
 
-        // Determine used titles in this game
         let usedTitles = Set(
             globallyCompleted.map(\.title) +
             unlockedChallenges.map(\.title) +
@@ -641,16 +637,14 @@ struct MainGameScreenView: View {
             failedChallenges.map(\.title)
         )
 
-        // Available challenge pools
-        let availableSpecific = sampleChallenges.filter {
+        let availableSpecific = allChallenges.filter {
             $0.station == station.name && !usedTitles.contains($0.title)
         }
 
-        let availableGlobal = sampleChallenges.filter {
+        let availableGlobal = allChallenges.filter {
             $0.station == "GLOBAL" && !usedTitles.contains($0.title)
         }
 
-        // Pick 50/50
         let trySpecificFirst = Bool.random()
         let primaryPool = trySpecificFirst ? availableSpecific : availableGlobal
         let fallbackPool = trySpecificFirst ? availableGlobal : availableSpecific
@@ -664,10 +658,10 @@ struct MainGameScreenView: View {
                 showAlert = true
             }
             print("❌ No challenge available for \(station.name)")
+            completion(nil)
             return
         }
 
-        // Assign line for tracking and coloring
         let assignedChallenge = GameChallenge(
             title: selected.title,
             description: selected.description,
@@ -678,6 +672,7 @@ struct MainGameScreenView: View {
 
         saveChallengeToUnlocked(assignedChallenge)
         print("✅ Unlocked challenge '\(assignedChallenge.title)' for \(station.name) on line \(line.rawValue)")
+        completion(assignedChallenge)
     }
 
     
@@ -945,24 +940,30 @@ struct MainGameScreenView: View {
         }
     }
     
-    func fetchStartTimeAndBeginTimer() {
+    private func fetchStartTimeAndBeginTimer() {
         let gameRef = Firestore.firestore().collection("games").document(gameID)
+
         gameRef.getDocument { snapshot, _ in
-            guard let data = snapshot?.data(),
-                  let timestamp = data["startTime"] as? Timestamp else { return }
+            guard
+                let data      = snapshot?.data(),
+                let timestamp = data["startTime"] as? Timestamp
+            else { return }
 
             let startTime = timestamp.dateValue()
-            let duration = TimeInterval(self.gameDurationFromDB * 60)
-            let endTime = startTime.addingTimeInterval(duration)
+            let duration  = TimeInterval(self.gameDurationFromDB * 60)
+            let endTime   = startTime.addingTimeInterval(duration)
 
+            // paint once
             updateRemainingTime(endTime: endTime)
 
-            timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
+            // 🛑 stop the previous ticker (if any) then start a fresh one
+            uiTimer?.invalidate()
+            uiTimer = Timer.scheduledTimer(withTimeInterval: 1,
+                                           repeats: true) { _ in
                 updateRemainingTime(endTime: endTime)
             }
         }
     }
-
     
     func updateRemainingTime(endTime: Date) {
         let remaining = endTime.timeIntervalSinceNow

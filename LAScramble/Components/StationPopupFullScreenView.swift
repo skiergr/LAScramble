@@ -1,11 +1,12 @@
 import SwiftUI
 
 struct StationPopupFullScreenView: View {
+    // MARK: - Inputs
     let station: Station
-    let onUnlock: (MetroLine) -> Void
+    let onUnlock: (MetroLine, @escaping (GameChallenge?) -> Void) -> Void
     let onClose: () -> Void
     let isSacrificed: Bool
-    let failedChallenges: [GameChallenge] // ✅ Pass in array, not isFailed Bool
+    let failedChallenges: [GameChallenge]
     let controllingTeamName: String?
     let teamNames: [String: String]
     let myTeamID: String
@@ -16,18 +17,22 @@ struct StationPopupFullScreenView: View {
     let allOtherUnlocked: [String: [GameChallenge]]
     let teamCompletions: [String: [GameChallenge]]
 
+    // MARK: - Bindings
     @Binding var selectedChallenge: GameChallenge?
     @Binding var selectedStation: Station?
 
-    @State private var isUnlocking = false
+    // MARK: - State
     @State private var currentLine: MetroLine
+    @State private var isUnlocking = false
+    @State private var showUnlockConfirm = false        // NEW
 
+    // MARK: - Init
     init(
         station: Station,
-        onUnlock: @escaping (MetroLine) -> Void,
+        onUnlock: @escaping (MetroLine, @escaping (GameChallenge?) -> Void) -> Void,
         onClose: @escaping () -> Void,
         isSacrificed: Bool,
-        failedChallenges: [GameChallenge], // ✅ array input
+        failedChallenges: [GameChallenge],
         controllingTeamName: String?,
         teamNames: [String: String],
         myTeamID: String,
@@ -40,42 +45,46 @@ struct StationPopupFullScreenView: View {
         selectedChallenge: Binding<GameChallenge?>,
         selectedStation: Binding<Station?>
     ) {
-        self.station = station
-        self.onUnlock = onUnlock
-        self.onClose = onClose
-        self.isSacrificed = isSacrificed
-        self.failedChallenges = failedChallenges
+        self.station            = station
+        self.onUnlock           = onUnlock
+        self.onClose            = onClose
+        self.isSacrificed       = isSacrificed
+        self.failedChallenges   = failedChallenges
         self.controllingTeamName = controllingTeamName
-        self.teamNames = teamNames
-        self.myTeamID = myTeamID
-        self.selectedLine = selectedLine
-        self._currentLine = State(initialValue: selectedLine)
-        self.allUnlocked = allUnlocked
-        self.allCompleted = allCompleted
-        self.globalCompleted = globalCompleted
-        self.allOtherUnlocked = allOtherUnlocked
-        self.teamCompletions = teamCompletions
+        self.teamNames          = teamNames
+        self.myTeamID           = myTeamID
+        self.selectedLine       = selectedLine
+        self._currentLine       = State(initialValue: selectedLine)
+        self.allUnlocked        = allUnlocked
+        self.allCompleted       = allCompleted
+        self.globalCompleted    = globalCompleted
+        self.allOtherUnlocked   = allOtherUnlocked
+        self.teamCompletions    = teamCompletions
         self._selectedChallenge = selectedChallenge
-        self._selectedStation = selectedStation
+        self._selectedStation   = selectedStation
     }
 
+    // MARK: - UI
     var body: some View {
         VStack(spacing: 16) {
+
+            // ── Header ───────────────────────────────
             Text(station.name)
-                .font(.largeTitle)
-                .bold()
+                .font(.largeTitle).bold()
                 .padding(.top)
 
+            // Multiple-line selector
             if station.lines.count > 1 {
                 HStack {
                     Text("Viewing:").font(.subheadline)
                     ForEach(station.lines, id: \.self) { line in
-                        Button(action: {
+                        Button {
                             currentLine = line
-                        }) {
+                        } label: {
                             Text(line.rawValue)
                                 .padding(8)
-                                .background(currentLine == line ? line.color : Color.gray.opacity(0.2))
+                                .background(currentLine == line ? line.color
+                                                               : Color.gray.opacity(0.2))
                                 .foregroundColor(.white)
                                 .cornerRadius(6)
                         }
@@ -83,22 +92,23 @@ struct StationPopupFullScreenView: View {
                 }
             }
 
+            // Status
             Text("Status: \(statusText)")
                 .font(.headline)
                 .foregroundColor(statusColor)
 
             if let team = controllingTeamName {
-                Text("Controlled by: \(team)")
-                    .font(.subheadline)
+                Text("Controlled by: \(team)").font(.subheadline)
             }
 
+            // ── Current challenge (if any) ───────────
             if let challenge = currentChallenge {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Challenge").bold()
-                    Button(action: {
+                    Button {
                         selectedChallenge = challenge
-                        selectedStation = nil
-                    }) {
+                        selectedStation   = nil
+                    } label: {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(challenge.title)
                             Text(challenge.description)
@@ -118,54 +128,67 @@ struct StationPopupFullScreenView: View {
                 .cornerRadius(10)
             }
 
-            if !isUnlocked && !isCompleted && !isSacrificed && !isFailed && completedByTeamID == nil {
-                Button(action: {
-                    guard !isUnlocking else { return }
-                    isUnlocking = true
-                    onUnlock(currentLine)
-                }) {
-                    Text("Unlock on \(currentLine.rawValue) Line")
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(currentLine.color)
-                        .foregroundColor(.white)
-                        .cornerRadius(8)
+            // ── Unlock button (with confirmation) ────
+            if canUnlock {
+                Button("Unlock on \(currentLine.rawValue) Line") {
+                    showUnlockConfirm = true          // open dialog
                 }
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(currentLine.color)
+                .foregroundColor(.white)
+                .cornerRadius(8)
             }
 
+            // Info messages for sacrificed/failed
             if isSacrificed {
                 Text("You sacrificed this station. You cannot unlock its challenge.")
-                    .font(.footnote)
-                    .foregroundColor(.red)
-                    .padding(.top, 8)
+                    .font(.footnote).foregroundColor(.red).padding(.top, 8)
             }
-
             if isFailed {
                 Text("You failed this station. You cannot unlock its challenge.")
-                    .font(.footnote)
-                    .foregroundColor(.red)
-                    .padding(.top, 8)
+                    .font(.footnote).foregroundColor(.red).padding(.top, 8)
             }
 
-            Button("Close") {
-                onClose()
-            }
-            .foregroundColor(.blue)
-            .padding(.top)
+            // Close
+            Button("Close", action: onClose)
+                .foregroundColor(.blue)
+                .padding(.top)
 
             Spacer()
         }
         .padding()
+        // ── Confirmation dialog ─────────────────────
+        .confirmationDialog(
+            "Unlock challenge at \(station.name)?",
+            isPresented: $showUnlockConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Unlock", role: .none) {
+                guard !isUnlocking else { return }
+                isUnlocking = true
+                onUnlock(currentLine) { newChallenge in
+                    if let ch = newChallenge {
+                        selectedChallenge = ch
+                        selectedStation   = nil
+                    }
+                }
+            }
+            Button("Cancel", role: .cancel) { }
+        }
+    }
+
+    // MARK: - Helpers / Computed
+    private var canUnlock: Bool {
+        !isUnlocked && !isCompleted && !isSacrificed && !isFailed && completedByTeamID == nil
     }
 
     private var isUnlocked: Bool {
         allUnlocked.contains { $0.station == station.name && $0.line == currentLine }
     }
-
     private var isCompleted: Bool {
         allCompleted.contains { $0.station == station.name && $0.line == currentLine }
     }
-
     private var isFailed: Bool {
         failedChallenges.contains { $0.station == station.name && $0.line == currentLine }
     }
@@ -176,11 +199,9 @@ struct StationPopupFullScreenView: View {
     }
 
     private var completedByTeamID: String? {
-        teamCompletions.first(where: { (_, challenges) in
-            challenges.contains {
-                $0.station == station.name && $0.line == currentLine
-            }
-        })?.key
+        teamCompletions.first { _, challenges in
+            challenges.contains { $0.station == station.name && $0.line == currentLine }
+        }?.key
     }
 
     private var statusText: String {

@@ -11,7 +11,10 @@
 		A001549A2DC82D6900F9819F /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = A00154992DC82D6900F9819F /* FirebaseCore */; };
 		A001549C2DC82D6900F9819F /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = A001549B2DC82D6900F9819F /* FirebaseFirestore */; };
 		A001549E2DC82D6900F9819F /* FirebaseStorage in Frameworks */ = {isa = PBXBuildFile; productRef = A001549D2DC82D6900F9819F /* FirebaseStorage */; };
-		A00154E42DC88AF600F9819F /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = A00154E32DC88AF600F9819F /* GoogleService-Info.plist */; };
+		A0A0E9752E0E54E100C0FA83 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = A0A0E9742E0E54E100C0FA83 /* FirebaseCore */; };
+		A0A0E9772E0E54E100C0FA83 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = A0A0E9762E0E54E100C0FA83 /* FirebaseFirestore */; };
+		A0A0E9812E0E596100C0FA83 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = A00154E32DC88AF600F9819F /* GoogleService-Info.plist */; };
+		A0A0E9832E0E59D900C0FA83 /* GoogleService-Info.plist in CopyFiles */ = {isa = PBXBuildFile; fileRef = A00154E32DC88AF600F9819F /* GoogleService-Info.plist */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -31,11 +34,25 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		A0A0E9822E0E59CE00C0FA83 /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 16;
+			files = (
+				A0A0E9832E0E59D900C0FA83 /* GoogleService-Info.plist in CopyFiles */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		A001546A2DC82C7500F9819F /* LAScramble.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LAScramble.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A00154772DC82C7600F9819F /* LAScrambleTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LAScrambleTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A00154812DC82C7600F9819F /* LAScrambleUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LAScrambleUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A00154E32DC88AF600F9819F /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
+		A0A0E96D2E0E52EC00C0FA83 /* ChallengeImporter */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = ChallengeImporter; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -52,6 +69,11 @@
 		A00154842DC82C7600F9819F /* LAScrambleUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = LAScrambleUITests;
+			sourceTree = "<group>";
+		};
+		A0A0E96E2E0E52EC00C0FA83 /* ChallengeImporter */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = ChallengeImporter;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -82,6 +104,15 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A0A0E96A2E0E52EC00C0FA83 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A0A0E9752E0E54E100C0FA83 /* FirebaseCore in Frameworks */,
+				A0A0E9772E0E54E100C0FA83 /* FirebaseFirestore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -91,6 +122,7 @@
 				A001546C2DC82C7500F9819F /* LAScramble */,
 				A001547A2DC82C7600F9819F /* LAScrambleTests */,
 				A00154842DC82C7600F9819F /* LAScrambleUITests */,
+				A0A0E96E2E0E52EC00C0FA83 /* ChallengeImporter */,
 				A001546B2DC82C7500F9819F /* Products */,
 				A00154E32DC88AF600F9819F /* GoogleService-Info.plist */,
 			);
@@ -102,6 +134,7 @@
 				A001546A2DC82C7500F9819F /* LAScramble.app */,
 				A00154772DC82C7600F9819F /* LAScrambleTests.xctest */,
 				A00154812DC82C7600F9819F /* LAScrambleUITests.xctest */,
+				A0A0E96D2E0E52EC00C0FA83 /* ChallengeImporter */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -181,6 +214,30 @@
 			productReference = A00154812DC82C7600F9819F /* LAScrambleUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		A0A0E96C2E0E52EC00C0FA83 /* ChallengeImporter */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A0A0E9712E0E52EC00C0FA83 /* Build configuration list for PBXNativeTarget "ChallengeImporter" */;
+			buildPhases = (
+				A0A0E9692E0E52EC00C0FA83 /* Sources */,
+				A0A0E96A2E0E52EC00C0FA83 /* Frameworks */,
+				A0A0E9822E0E59CE00C0FA83 /* CopyFiles */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				A0A0E96E2E0E52EC00C0FA83 /* ChallengeImporter */,
+			);
+			name = ChallengeImporter;
+			packageProductDependencies = (
+				A0A0E9742E0E54E100C0FA83 /* FirebaseCore */,
+				A0A0E9762E0E54E100C0FA83 /* FirebaseFirestore */,
+			);
+			productName = ChallengeImporter;
+			productReference = A0A0E96D2E0E52EC00C0FA83 /* ChallengeImporter */;
+			productType = "com.apple.product-type.tool";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -201,6 +258,9 @@
 					A00154802DC82C7600F9819F = {
 						CreatedOnToolsVersion = 16.3;
 						TestTargetID = A00154692DC82C7500F9819F;
+					};
+					A0A0E96C2E0E52EC00C0FA83 = {
+						CreatedOnToolsVersion = 16.3;
 					};
 				};
 			};
@@ -224,6 +284,7 @@
 				A00154692DC82C7500F9819F /* LAScramble */,
 				A00154762DC82C7600F9819F /* LAScrambleTests */,
 				A00154802DC82C7600F9819F /* LAScrambleUITests */,
+				A0A0E96C2E0E52EC00C0FA83 /* ChallengeImporter */,
 			);
 		};
 /* End PBXProject section */
@@ -233,7 +294,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A00154E42DC88AF600F9819F /* GoogleService-Info.plist in Resources */,
+				A0A0E9812E0E596100C0FA83 /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -269,6 +330,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		A001547D2DC82C7600F9819F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A0A0E9692E0E52EC00C0FA83 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -432,7 +500,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.2;
+				MARKETING_VERSION = 1.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.scramble.LAScramble;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -461,7 +529,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.2;
+				MARKETING_VERSION = 1.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.scramble.LAScramble;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -542,6 +610,32 @@
 			};
 			name = Release;
 		};
+		A0A0E9722E0E52EC00C0FA83 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 35AG3P6KDM;
+				ENABLE_HARDENED_RUNTIME = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.4;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		A0A0E9732E0E52EC00C0FA83 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 35AG3P6KDM;
+				ENABLE_HARDENED_RUNTIME = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.4;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -581,6 +675,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		A0A0E9712E0E52EC00C0FA83 /* Build configuration list for PBXNativeTarget "ChallengeImporter" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A0A0E9722E0E52EC00C0FA83 /* Debug */,
+				A0A0E9732E0E52EC00C0FA83 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
@@ -614,6 +717,14 @@
 			isa = XCSwiftPackageProductDependency;
 			package = A00154962DC82D6900F9819F /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseStorage;
+		};
+		A0A0E9742E0E54E100C0FA83 /* FirebaseCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = FirebaseCore;
+		};
+		A0A0E9762E0E54E100C0FA83 /* FirebaseFirestore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = FirebaseFirestore;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

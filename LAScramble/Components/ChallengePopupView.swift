@@ -12,6 +12,10 @@ struct ChallengePopupView: View {
 
     @Binding var selectedStation: Station?
     @Binding var selectedChallenge: GameChallenge?
+    
+    @State private var showCompleteConfirm = false
+    @State private var showSacrificeConfirm = false
+    @State private var showFailConfirm = false
 
     var body: some View {
         VStack(spacing: 16) {
@@ -32,33 +36,51 @@ struct ChallengePopupView: View {
                 .background(Color(UIColor.secondarySystemBackground))
                 .cornerRadius(8)
 
-            Button(action: onComplete) {
-                Text("Complete")
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.green)
-                    .foregroundColor(.white)
-                    .cornerRadius(8)
+            Button("Complete") {
+                showCompleteConfirm = true
+            }
+            .frame(maxWidth: .infinity)
+            .padding()
+            .background(Color.green)
+            .foregroundColor(.white)
+            .cornerRadius(8)
+            .confirmationDialog("Mark this challenge complete?", isPresented: $showCompleteConfirm) {
+                Button("Complete", role: .destructive) {
+                    onComplete()
+                }
+                Button("Cancel", role: .cancel) {}
             }
 
-            Button(action: onSacrifice) {
-                Text("Sacrifice")
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.orange)
-                    .foregroundColor(.white)
-                    .cornerRadius(8)
+            Button("Sacrifice") {
+                showSacrificeConfirm = true
+            }
+            .frame(maxWidth: .infinity)
+            .padding()
+            .background(Color.orange)
+            .foregroundColor(.white)
+            .cornerRadius(8)
+            .confirmationDialog("Sacrifice this challenge?", isPresented: $showSacrificeConfirm) {
+                Button("Sacrifice", role: .destructive) {
+                    onSacrifice()
+                }
+                Button("Cancel", role: .cancel) {}
             }
 
             // ✅ Show this only if canFail is true
             if challenge.canFail == true {
-                Button(action: onFail) {
-                    Text("Fail")
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.red)
-                        .foregroundColor(.white)
-                        .cornerRadius(8)
+                Button("Fail") {
+                    showFailConfirm = true
+                }
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(Color.red)
+                .foregroundColor(.white)
+                .cornerRadius(8)
+                .confirmationDialog("Fail this challenge?", isPresented: $showFailConfirm) {
+                    Button("Fail", role: .destructive) {
+                        onFail()
+                    }
+                    Button("Cancel", role: .cancel) {}
                 }
             }
 
